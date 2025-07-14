@@ -2,8 +2,7 @@
 package storage
 
 import (
-	"encoding/binary"
-	"errors"
+	dberrors "github.com/platonoff-dev/coredb/internal/errors"
 )
 
 const (
@@ -25,23 +24,5 @@ type FreelistPage struct {
 type SchemaPage struct{}
 
 func (rp *RawPage) AsFreelist() (*FreelistPage, error) {
-	if rp.Type != PageTypeDBHeader {
-		return nil, errors.New("not a freelist page")
-	}
-
-	freePages := make([]uint32, 0)
-	for i := len(rp.Data); i > 8; i -= 4 {
-		pageID := binary.LittleEndian.Uint32(rp.Data[i : i+4])
-		if pageID == 0 {
-			break
-		}
-		freePages = append(freePages, pageID)
-	}
-
-	nextFreePage := binary.LittleEndian.Uint32(rp.Data[0:4])
-
-	return &FreelistPage{
-		FreePages:    freePages,
-		NextFreePage: nextFreePage,
-	}, nil
+	return nil, dberrors.ErrNotImplemented
 }
