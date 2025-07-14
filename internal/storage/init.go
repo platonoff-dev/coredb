@@ -12,6 +12,39 @@ const (
 	dbHeaderPageSize = 4096
 )
 
+func Init(
+	filePath string,
+	pageSize uint32,
+) (*FilePageManager, error) {
+	file, isNew, err := openFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	var header *DBHeader
+	if isNew {
+		header, err = initHeader(file, pageSize)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		header, err = readHeader(file)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if !header.IsValid() {
+		return nil, dberrors.ErrInvalidFileFormat
+	}
+
+	return &FilePageManager{
+		Header:   header,
+		File:     file,
+		PageSize: pageSize,
+	}, nil
+}
+
 func openFile(filePath string) (file DBFileOperator, isNew bool, err error) {
 	if filePath == memoryFilePath {
 		isNew = true
@@ -67,37 +100,4 @@ func readHeader(file DBFileOperator) (*DBHeader, error) {
 	}
 
 	return header, nil
-}
-
-func Init(
-	filePath string,
-	pageSize uint32,
-) (*FilePageManager, error) {
-	file, isNew, err := openFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	var header *DBHeader
-	if isNew {
-		header, err = initHeader(file, pageSize)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		header, err = readHeader(file)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if !header.IsValid() {
-		return nil, dberrors.ErrInvalidFileFormat
-	}
-
-	return &FilePageManager{
-		Header:   header,
-		File:     file,
-		PageSize: pageSize,
-	}, nil
 }
