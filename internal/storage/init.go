@@ -2,6 +2,8 @@ package storage
 
 import (
 	"os"
+
+	dberrors "github.com/platonoff-dev/coredb/internal/errors"
 )
 
 const (
@@ -30,6 +32,43 @@ func openFile(filePath string) (file DBFileOperator, isNew bool, err error) {
 	return
 }
 
+func initHeader(file DBFileOperator, pageSize uint32) (*DBHeader, error) {
+	header := &DBHeader{
+		Magic:          []byte(Magic),
+		Version:        1,
+		PageSize:       pageSize,
+		FreeListPageID: 1,
+	}
+
+	err := file.Truncate(dbHeaderPageSize)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = file.WriteAt(header.Encode(), 0)
+	if err != nil {
+		return nil, err
+	}
+
+	return header, nil
+}
+
+func readHeader(file DBFileOperator) (*DBHeader, error) {
+	headerBuff := make([]byte, dbHeaderPageSize)
+	_, err := file.ReadAt(headerBuff, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	header := &DBHeader{}
+	err = header.Decode(headerBuff)
+	if err != nil {
+		return nil, err
+	}
+
+	return header, nil
+}
+
 func Init(
 	filePath string,
 	pageSize uint32,
@@ -39,26 +78,25 @@ func Init(
 		return nil, err
 	}
 
+	var header *DBHeader
 	if isNew {
-		// Initialize the file with a header or any necessary initial data
-		err := file.Truncate(dbHeaderPageSize)
+		header, err = initHeader(file, pageSize)
 		if err != nil {
 			return nil, err
 		}
-
-		header := DBHeader{
-			Magic:          []byte(Magic),
-			Version:        1,
-			PageSize:       pageSize,
-			FreeListPageID: 1,
-		}
-		_, err = file.WriteAt(header.Encode(), 0)
+	} else {
+		header, err = readHeader(file)
 		if err != nil {
 			return nil, err
 		}
 	}
 
+	if !header.IsValid() {
+		return nil, dberrors.ErrInvalidFileFormat
+	}
+
 	return &FilePageManager{
+		Header:   header,
 		File:     file,
 		PageSize: pageSize,
 	}, nil
