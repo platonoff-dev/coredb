@@ -1,4 +1,4 @@
-// Package storage package implements logic needed for basic operations with disk, B-Tree, etc
+// Package storage provides functionality for managing database storage layer.
 package storage
 
 import (
@@ -7,6 +7,9 @@ import (
 
 const (
 	PageTypeDBHeader byte = iota + 1
+	PageTypeFreelist
+	PageTypeBTreeInternal
+	PageTypeBTreeLeaf
 )
 
 type RawPage struct {
@@ -20,8 +23,6 @@ type FreelistPage struct {
 	FreePages    []uint32
 	NextFreePage uint32
 }
-
-type SchemaPage struct{}
 
 func (rp *RawPage) AsFreelist() (*FreelistPage, error) {
 	return nil, dberrors.ErrNotImplemented
