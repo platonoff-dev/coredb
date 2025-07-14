@@ -12,7 +12,7 @@
 
 ## Page structure
 
-Structure of all pages except for the DB Header page: 
+Structure of all pages except for the DB Header page:
 
 | Description        | Size               |
 |--------------------|--------------------|
