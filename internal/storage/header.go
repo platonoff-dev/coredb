@@ -11,34 +11,42 @@ type DBHeader struct {
 	Version        uint16 // Version of the database format
 	PageSize       uint32 // Size of each page in the database
 	FreeListPageID uint32 // Page ID of the freelist page
+	PageCount      uint32 // Total number of pages in the database
 }
 
 func (h *DBHeader) Encode() []byte {
-	// Encode the header into a byte slice
-	data := make([]byte, 0)
+	data := []byte{}
+
 	data = append(data, h.Magic...)
-	binary.LittleEndian.AppendUint16(data, h.Version)
-	binary.LittleEndian.AppendUint32(data, h.PageSize)
-	binary.LittleEndian.AppendUint32(data, h.FreeListPageID)
+	data = binary.LittleEndian.AppendUint16(data, h.Version)
+	data = binary.LittleEndian.AppendUint32(data, h.PageSize)
+	data = binary.LittleEndian.AppendUint32(data, h.FreeListPageID)
+	data = binary.LittleEndian.AppendUint32(data, h.PageCount)
 	return data
 }
 
 func (h *DBHeader) Decode(data []byte) error {
-	if len(data) < 12 {
+	if len(data) < 20 {
 		return dberrors.ErrInvalidFileFormat
 	}
 
-	h.Magic = data[:8]
-	h.Version = binary.LittleEndian.Uint16(data[8:10])
-	h.PageSize = binary.LittleEndian.Uint32(data[10:14])
-	h.FreeListPageID = binary.LittleEndian.Uint32(data[14:18])
+	h.Magic = data[:6]
+	h.Version = binary.LittleEndian.Uint16(data[6:8])
+	h.PageSize = binary.LittleEndian.Uint32(data[8:12])
+	h.FreeListPageID = binary.LittleEndian.Uint32(data[12:16])
+	h.PageCount = binary.LittleEndian.Uint32(data[16:20])
 
 	return nil
 }
 
 func (h *DBHeader) IsValid() bool {
 	// Check if the magic number is valid
-	if len(h.Magic) != 8 || string(h.Magic) != "COREDB" {
+	if len(h.Magic) != 6 {
+		return false
+	}
+	// Compare only the non-zero bytes of magic (COREDB should be at the beginning)
+	magicStr := string(h.Magic)
+	if len(magicStr) < 6 || magicStr[:6] != "COREDB" {
 		return false
 	}
 	// Check if the version is supported

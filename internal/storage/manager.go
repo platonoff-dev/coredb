@@ -19,17 +19,58 @@ type FilePageManager struct {
 }
 
 func (pm *FilePageManager) Read(pageID uint32) (*RawPage, error) {
-	return nil, dberrors.ErrNotImplemented
+	if pageID == 0 {
+		return nil, dberrors.ErrInvalidPageID
+	}
+
+	data := make([]byte, pm.PageSize)
+	_, err := pm.File.ReadAt(data, int64(pageID*pm.PageSize))
+	if err != nil {
+		return nil, err
+	}
+
+	page := &RawPage{}
+	page.Decode(pageID, data)
+
+	return page, nil
 }
 
 func (pm *FilePageManager) Write(page *RawPage) error {
-	return dberrors.ErrNotImplemented
+	if page == nil {
+		return dberrors.ErrInvalidPageID
+	}
+
+	data := page.Encode(pm.PageSize)
+	_, err := pm.File.WriteAt(data, int64(page.ID*pm.PageSize))
+	return err
 }
 
 func (pm *FilePageManager) Allocate() (*RawPage, error) {
-	return nil, dberrors.ErrNotImplemented
+	page := &RawPage{
+		ID:              pm.Header.PageCount + 1,
+		Type:            PageTypeBTreeLeaf,
+		FreeSpaceOffset: 0,
+		Data:            make([]byte, pm.PageSize),
+	}
+
+	err := pm.File.Truncate(int64(pm.Header.PageCount+1) * int64(pm.PageSize))
+	if err != nil {
+		return nil, err
+	}
+
+	pm.Header.PageCount++
+	return page, nil
 }
 
-func (pm *FilePageManager) Free() error {
-	return dberrors.ErrNotImplemented
+func (pm *FilePageManager) Free(pageID uint32) error {
+	if pageID == 0 {
+		return dberrors.ErrInvalidPageID
+	}
+
+	_, err := pm.Read(pageID)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

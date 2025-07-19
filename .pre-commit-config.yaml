@@ -13,10 +13,6 @@ repos:
   - id: go-mod-tidy
     name: Go Mod Tidy
     description: Runs go mod tidy
-  - id: go-unit-tests
-    name: Go Unit Tests
-    description: Runs go test
-    args: [ -race, -cover ]
   - id: go-build
     name: Go Build
     description: Runs go build

@@ -2,7 +2,7 @@
 package storage
 
 import (
-	dberrors "github.com/platonoff-dev/coredb/internal/errors"
+	"encoding/binary"
 )
 
 const (
@@ -19,11 +19,18 @@ type RawPage struct {
 	Type            byte
 }
 
-type FreelistPage struct {
-	FreePages    []uint32
-	NextFreePage uint32
+func (p *RawPage) Encode(pageSize uint32) []byte {
+	data := make([]byte, pageSize)
+
+	data[0] = p.Type
+	binary.LittleEndian.PutUint32(data[1:5], p.FreeSpaceOffset)
+	copy(data[5:], p.Data)
+	return data
 }
 
-func (rp *RawPage) AsFreelist() (*FreelistPage, error) {
-	return nil, dberrors.ErrNotImplemented
+func (p *RawPage) Decode(id uint32, data []byte) {
+	p.ID = id
+	p.Type = data[0]
+	p.FreeSpaceOffset = binary.LittleEndian.Uint32(data[1:5])
+	p.Data = data[5:]
 }

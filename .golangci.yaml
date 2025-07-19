@@ -188,6 +188,8 @@ linters:
       - funlen
       - lll
       - revive
+      - cyclop
+      - errcheck
 formatters:
   enable:
   - gci
