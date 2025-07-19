@@ -13,14 +13,18 @@ type DBFileOperator interface {
 
 // FilePageManager manager provides abstraction to work with disk.
 type FilePageManager struct {
-	Header   *DBHeader
 	File     DBFileOperator
+	Header   DBHeader
 	PageSize uint32
 }
 
 func (pm *FilePageManager) Read(pageID uint32) (*RawPage, error) {
 	if pageID == 0 {
 		return nil, dberrors.ErrInvalidPageID
+	}
+
+	if pm.File == nil {
+		return nil, dberrors.ErrInvalidFileFormat
 	}
 
 	data := make([]byte, pm.PageSize)
@@ -40,12 +44,20 @@ func (pm *FilePageManager) Write(page *RawPage) error {
 		return dberrors.ErrInvalidPageID
 	}
 
+	if pm.File == nil {
+		return dberrors.ErrInvalidFileFormat
+	}
+
 	data := page.Encode(pm.PageSize)
 	_, err := pm.File.WriteAt(data, int64(page.ID*pm.PageSize))
 	return err
 }
 
 func (pm *FilePageManager) Allocate() (*RawPage, error) {
+	if pm.File == nil {
+		return nil, dberrors.ErrInvalidFileFormat
+	}
+
 	page := &RawPage{
 		ID:              pm.Header.PageCount + 1,
 		Type:            PageTypeBTreeLeaf,
@@ -58,13 +70,23 @@ func (pm *FilePageManager) Allocate() (*RawPage, error) {
 		return nil, err
 	}
 
+	err = pm.Write(page)
+	if err != nil {
+		return nil, err
+	}
+
 	pm.Header.PageCount++
+
 	return page, nil
 }
 
 func (pm *FilePageManager) Free(pageID uint32) error {
 	if pageID == 0 {
 		return dberrors.ErrInvalidPageID
+	}
+
+	if pm.File == nil {
+		return dberrors.ErrInvalidFileFormat
 	}
 
 	_, err := pm.Read(pageID)

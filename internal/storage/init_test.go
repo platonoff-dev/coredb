@@ -113,12 +113,6 @@ func TestInit(t *testing.T) {
 				return
 			}
 
-			// Verify the header is properly initialized
-			if pm.Header == nil {
-				t.Error("Header is nil")
-				return
-			}
-
 			if !pm.Header.IsValid() {
 				t.Error("Header is not valid")
 			}

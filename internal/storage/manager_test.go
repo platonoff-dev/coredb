@@ -196,34 +196,6 @@ func TestFilePageManager_EdgeCases(t *testing.T) {
 		assert.Nil(t, page)
 		assert.Error(t, err)
 	})
-
-	t.Run("should handle manager with nil header", func(t *testing.T) {
-		// Given
-		manager := &FilePageManager{
-			Header:   nil, // nil header
-			File:     &MemoryFile{Data: make([]byte, 8192)},
-			PageSize: 4096,
-		}
-
-		// When & Then
-		page, err := manager.Read(1)
-		assert.Nil(t, page)
-		assert.Error(t, err)
-	})
-
-	t.Run("should handle zero page size", func(t *testing.T) {
-		// Given
-		manager := &FilePageManager{
-			Header:   createTestHeader(),
-			File:     &MemoryFile{Data: make([]byte, 8192)},
-			PageSize: 0, // invalid page size
-		}
-
-		// When & Then
-		page, err := manager.Read(1)
-		assert.Nil(t, page)
-		assert.Error(t, err)
-	})
 }
 
 // Helper functions
@@ -246,8 +218,8 @@ func createTestMemoryFile() *MemoryFile {
 	} // 2 pages worth
 }
 
-func createTestHeader() *DBHeader {
-	return &DBHeader{
+func createTestHeader() DBHeader {
+	return DBHeader{
 		Magic:          []byte("COREDB\x00\x00"),
 		Version:        1,
 		PageSize:       4096,

@@ -39,7 +39,7 @@ func Init(
 	}
 
 	return &FilePageManager{
-		Header:   header,
+		Header:   *header,
 		File:     file,
 		PageSize: pageSize,
 	}, nil
