@@ -18,17 +18,17 @@ type FilePageManager struct {
 	PageSize uint32
 }
 
-func (pm *FilePageManager) Read(pageID uint32) (*RawPage, error) {
+func (m *FilePageManager) Read(pageID uint32) (*RawPage, error) {
 	if pageID == 0 {
 		return nil, dberrors.ErrInvalidPageID
 	}
 
-	if pm.File == nil {
+	if m.File == nil {
 		return nil, dberrors.ErrInvalidFileFormat
 	}
 
-	data := make([]byte, pm.PageSize)
-	_, err := pm.File.ReadAt(data, int64(pageID*pm.PageSize))
+	data := make([]byte, m.PageSize)
+	_, err := m.File.ReadAt(data, int64(pageID*m.PageSize))
 	if err != nil {
 		return nil, err
 	}
@@ -39,57 +39,57 @@ func (pm *FilePageManager) Read(pageID uint32) (*RawPage, error) {
 	return page, nil
 }
 
-func (pm *FilePageManager) Write(page *RawPage) error {
+func (m *FilePageManager) Write(page *RawPage) error {
 	if page == nil {
 		return dberrors.ErrInvalidPageID
 	}
 
-	if pm.File == nil {
+	if m.File == nil {
 		return dberrors.ErrInvalidFileFormat
 	}
 
-	data := page.Encode(pm.PageSize)
-	_, err := pm.File.WriteAt(data, int64(page.ID*pm.PageSize))
+	data := page.Encode(m.PageSize)
+	_, err := m.File.WriteAt(data, int64(page.ID*m.PageSize))
 	return err
 }
 
-func (pm *FilePageManager) Allocate() (*RawPage, error) {
-	if pm.File == nil {
+func (m *FilePageManager) Allocate() (*RawPage, error) {
+	if m.File == nil {
 		return nil, dberrors.ErrInvalidFileFormat
 	}
 
 	page := &RawPage{
-		ID:              pm.Header.PageCount + 1,
+		ID:              m.Header.PageCount + 1,
 		Type:            PageTypeBTreeLeaf,
 		FreeSpaceOffset: 0,
-		Data:            make([]byte, pm.PageSize),
+		Data:            make([]byte, m.PageSize),
 	}
 
-	err := pm.File.Truncate(int64(pm.Header.PageCount+1) * int64(pm.PageSize))
+	err := m.File.Truncate(int64(m.Header.PageCount+1) * int64(m.PageSize))
 	if err != nil {
 		return nil, err
 	}
 
-	err = pm.Write(page)
+	err = m.Write(page)
 	if err != nil {
 		return nil, err
 	}
 
-	pm.Header.PageCount++
+	m.Header.PageCount++
 
 	return page, nil
 }
 
-func (pm *FilePageManager) Free(pageID uint32) error {
+func (m *FilePageManager) Free(pageID uint32) error {
 	if pageID == 0 {
 		return dberrors.ErrInvalidPageID
 	}
 
-	if pm.File == nil {
+	if m.File == nil {
 		return dberrors.ErrInvalidFileFormat
 	}
 
-	_, err := pm.Read(pageID)
+	_, err := m.Read(pageID)
 	if err != nil {
 		return err
 	}

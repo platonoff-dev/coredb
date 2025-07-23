@@ -195,6 +195,16 @@ func TestFilePageManager_EdgeCases(t *testing.T) {
 		page, err := manager.Read(1)
 		assert.Nil(t, page)
 		assert.Error(t, err)
+
+		err = manager.Write(&RawPage{})
+		assert.Error(t, err)
+
+		page, err = manager.Allocate()
+		assert.Nil(t, page)
+		assert.Error(t, err)
+
+		err = manager.Free(1)
+		assert.Error(t, err)
 	})
 }
 
