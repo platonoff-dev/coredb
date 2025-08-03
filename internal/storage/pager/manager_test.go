@@ -12,7 +12,7 @@ func TestFilePageManager_Read(t *testing.T) {
 	t.Run("should read existing page successfully", func(t *testing.T) {
 		// Given
 		manager := createTestManager(t)
-		pageID := PageID(1)
+		var pageID int64 = 1
 
 		// When
 		page, err := manager.Read(pageID)
@@ -26,7 +26,7 @@ func TestFilePageManager_Read(t *testing.T) {
 	t.Run("should handle invalid page ID", func(t *testing.T) {
 		// Given
 		manager := createTestManager(t)
-		invalidPageID := PageID(0) // Page ID 0 is typically invalid
+		invalidPageID := int64(0) // Page ID 0 is typically invalid
 
 		// When
 		page, err := manager.Read(invalidPageID)
@@ -48,7 +48,7 @@ func TestFilePageManager_Write(t *testing.T) {
 		copy(pageData, "test data") // Fill with some test data
 
 		// When
-		err := manager.Write(PageID(1), pageData)
+		err := manager.Write(1, pageData)
 
 		// Then
 		assert.NoError(t, err)
@@ -73,7 +73,7 @@ func TestFilePageManager_Write(t *testing.T) {
 		copy(pageData, "initial data")
 
 		// When
-		err := manager.Write(PageID(1), pageData)
+		err := manager.Write(1, pageData)
 
 		// Then
 		assert.NoError(t, err)
@@ -92,7 +92,7 @@ func TestFilePageManager_Allocate(t *testing.T) {
 
 		// Then
 		assert.NoError(t, err)
-		assert.Greater(t, id, PageID(0))
+		assert.Greater(t, id, int64(0))
 	})
 
 	t.Run("should allocate multiple pages with different IDs", func(t *testing.T) {
@@ -127,7 +127,7 @@ func TestFilePageManager_Free(t *testing.T) {
 	t.Run("should handle freeing invalid page ID", func(t *testing.T) {
 		// Given
 		manager := createTestManager(t)
-		invalidPageID := PageID(999)
+		invalidPageID := int64(999)
 
 		// When
 		err := manager.Free(invalidPageID)
@@ -153,7 +153,7 @@ func TestFilePageManager_EdgeCases(t *testing.T) {
 		assert.Nil(t, page)
 		assert.Error(t, err)
 
-		err = manager.Write(PageID(1), []byte("test data"))
+		err = manager.Write(int64(1), []byte("test data"))
 		assert.Error(t, err)
 
 		pageID, err := manager.Allocate()

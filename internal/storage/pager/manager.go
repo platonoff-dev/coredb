@@ -4,8 +4,6 @@ import (
 	dberrors "github.com/platonoff-dev/coredb/internal/errors"
 )
 
-type PageID int64
-
 type DBFileOperator interface {
 	Close() error
 	ReadAt(b []byte, off int64) (n int, err error)
@@ -20,7 +18,7 @@ type FilePageManager struct {
 	PageSize uint32
 }
 
-func (m *FilePageManager) Read(pageID PageID) ([]byte, error) {
+func (m *FilePageManager) Read(pageID int64) ([]byte, error) {
 	if pageID == 0 {
 		return nil, dberrors.ErrInvalidPageID
 	}
@@ -30,7 +28,7 @@ func (m *FilePageManager) Read(pageID PageID) ([]byte, error) {
 	}
 
 	data := make([]byte, m.PageSize)
-	offset := int64(pageID) * int64(m.PageSize)
+	offset := pageID * int64(m.PageSize)
 	_, err := m.File.ReadAt(data, offset)
 	if err != nil {
 		return nil, err
@@ -39,7 +37,7 @@ func (m *FilePageManager) Read(pageID PageID) ([]byte, error) {
 	return data, nil
 }
 
-func (m *FilePageManager) Write(id PageID, data []byte) error {
+func (m *FilePageManager) Write(id int64, data []byte) error {
 	if m.File == nil {
 		return dberrors.ErrInvalidFileFormat
 	}
@@ -52,7 +50,7 @@ func (m *FilePageManager) Write(id PageID, data []byte) error {
 	return err
 }
 
-func (m *FilePageManager) Allocate() (PageID, error) {
+func (m *FilePageManager) Allocate() (int64, error) {
 	if m.File == nil {
 		return 0, dberrors.ErrInvalidFileFormat
 	}
@@ -64,10 +62,10 @@ func (m *FilePageManager) Allocate() (PageID, error) {
 
 	m.Header.PageCount++
 
-	return PageID(m.Header.PageCount - 1), nil
+	return int64(m.Header.PageCount - 1), nil
 }
 
-func (m *FilePageManager) Free(id PageID) error {
+func (m *FilePageManager) Free(id int64) error {
 	if id == 0 {
 		return dberrors.ErrInvalidPageID
 	}
