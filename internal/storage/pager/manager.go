@@ -4,6 +4,8 @@ import (
 	dberrors "github.com/platonoff-dev/coredb/internal/errors"
 )
 
+type PageID int64
+
 type DBFileOperator interface {
 	Close() error
 	ReadAt(b []byte, off int64) (n int, err error)
@@ -18,7 +20,7 @@ type FilePageManager struct {
 	PageSize uint32
 }
 
-func (m *FilePageManager) Read(pageID uint32) (*RawPage, error) {
+func (m *FilePageManager) Read(pageID PageID) ([]byte, error) {
 	if pageID == 0 {
 		return nil, dberrors.ErrInvalidPageID
 	}
@@ -28,60 +30,45 @@ func (m *FilePageManager) Read(pageID uint32) (*RawPage, error) {
 	}
 
 	data := make([]byte, m.PageSize)
-	_, err := m.File.ReadAt(data, int64(pageID*m.PageSize))
+	offset := int64(pageID) * int64(m.PageSize)
+	_, err := m.File.ReadAt(data, offset)
 	if err != nil {
 		return nil, err
 	}
 
-	page := &RawPage{}
-	page.Decode(pageID, data)
-
-	return page, nil
+	return data, nil
 }
 
-func (m *FilePageManager) Write(page *RawPage) error {
-	if page == nil {
-		return dberrors.ErrInvalidPageID
-	}
-
+func (m *FilePageManager) Write(id PageID, data []byte) error {
 	if m.File == nil {
 		return dberrors.ErrInvalidFileFormat
 	}
 
-	data := page.Encode(m.PageSize)
-	_, err := m.File.WriteAt(data, int64(page.ID*m.PageSize))
+	if data == nil || len(data) != int(m.PageSize) {
+		return dberrors.ErrInvalidPageFormat
+	}
+
+	_, err := m.File.WriteAt(data, int64(m.Header.PageCount*m.PageSize))
 	return err
 }
 
-func (m *FilePageManager) Allocate() (*RawPage, error) {
+func (m *FilePageManager) Allocate() (PageID, error) {
 	if m.File == nil {
-		return nil, dberrors.ErrInvalidFileFormat
-	}
-
-	page := &RawPage{
-		ID:              m.Header.PageCount + 1,
-		Type:            PageTypeBTreeLeaf,
-		FreeSpaceOffset: 0,
-		Data:            make([]byte, m.PageSize),
+		return 0, dberrors.ErrInvalidFileFormat
 	}
 
 	err := m.File.Truncate(int64(m.Header.PageCount+1) * int64(m.PageSize))
 	if err != nil {
-		return nil, err
-	}
-
-	err = m.Write(page)
-	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
 	m.Header.PageCount++
 
-	return page, nil
+	return PageID(m.Header.PageCount - 1), nil
 }
 
-func (m *FilePageManager) Free(pageID uint32) error {
-	if pageID == 0 {
+func (m *FilePageManager) Free(id PageID) error {
+	if id == 0 {
 		return dberrors.ErrInvalidPageID
 	}
 
@@ -89,7 +76,7 @@ func (m *FilePageManager) Free(pageID uint32) error {
 		return dberrors.ErrInvalidFileFormat
 	}
 
-	_, err := m.Read(pageID)
+	_, err := m.Read(id)
 	if err != nil {
 		return err
 	}
