@@ -1,4 +1,4 @@
-package storage
+package pager
 
 import (
 	"encoding/binary"

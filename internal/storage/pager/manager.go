@@ -1,4 +1,4 @@
-package storage
+package pager
 
 import (
 	dberrors "github.com/platonoff-dev/coredb/internal/errors"
@@ -93,6 +93,8 @@ func (m *FilePageManager) Free(pageID uint32) error {
 	if err != nil {
 		return err
 	}
+
+	// TODO: Actually free pages when freelist will be implemented
 
 	return nil
 }

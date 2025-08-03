@@ -1,14 +1,12 @@
 // Package storage provides functionality for managing database storage layer.
-package storage
+package pager
 
 import (
 	"encoding/binary"
 )
 
 const (
-	PageTypeDBHeader byte = iota + 1
-	PageTypeFreelist
-	PageTypeBTreeInternal
+	PageTypeBTreeInternal = iota + 1
 	PageTypeBTreeLeaf
 )
 
