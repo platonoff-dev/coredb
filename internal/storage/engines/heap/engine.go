@@ -25,45 +25,56 @@ func NewHeapEngine(pageManager pager.FilePageManager) Engine {
 }
 
 func (e *Engine) Insert(rowID int64, record engines.Record) error {
-	page, err := e.getPage(e.tableMetadata.HeadPageID)
-	if err != nil {
-		return err
-	}
-
-	for page.WritableSpace < uint64(len(record)) || page.NextPageID == 0 {
-		page, err = e.getPage(page.NextPageID)
+	pageID := e.tableMetadata.HeadPageID
+	var writablePage *Page
+	var currentPage *Page
+	for {
+		currentPage, err := e.getPage(pageID)
 		if err != nil {
 			return err
 		}
+
+		if currentPage.WritableSpace >= uint64(len(record)) {
+			writablePage = currentPage
+			break
+		}
+
+		if currentPage.NextPageID == 0 {
+			break
+		}
 	}
 
-	if page.NextPageID == 0 {
+	if writablePage == nil {
 		newPageID, err := e.pageManager.Allocate()
 		if err != nil {
 			return err
 		}
 
-		page.NextPageID = newPageID
-		err = e.writePage(page)
+		currentPage.NextPageID = newPageID
+		err = e.writePage(currentPage)
 		if err != nil {
 			return err
 		}
 
-		page = &Page{
+		writablePage = &Page{
 			ID:              newPageID,
 			FreeSpaceOffset: uint64(e.pageManager.PageSize),
 			WritableSpace:   uint64(e.pageManager.PageSize) - HeaderSize,
 			NextPageID:      0,
+			Type:            pager.PageTypeHeap,
+			RecordMap:       make(map[int64][]uint64),
+		}
+		err = e.writePage(writablePage)
+		if err != nil {
+			return err
 		}
 	}
 
-	bakwardOffset := page.FreeSpaceOffset - uint64(len(record))
-	copy(page.Data[page.FreeSpaceOffset:], record)
-	page.FreeSpaceOffset = bakwardOffset
-	page.WritableSpace -= uint64(len(record))
-	page.RecordMap[rowID] = bakwardOffset
-
-	err = e.writePage(page)
+	writablePage.RecordMap[rowID] = []uint64{writablePage.FreeSpaceOffset, uint64(len(record))}
+	writablePage.FreeSpaceOffset -= uint64(len(record))
+	writablePage.WritableSpace -= uint64(len(record))
+	copy(writablePage.Data[writablePage.FreeSpaceOffset:], record)
+	err := e.writePage(writablePage)
 	if err != nil {
 		return err
 	}
@@ -72,7 +83,25 @@ func (e *Engine) Insert(rowID int64, record engines.Record) error {
 }
 
 func (e *Engine) Get(rowID int64) (engines.Record, error) {
-	return nil, errors.New("not implemented")
+	pageID := e.tableMetadata.HeadPageID
+	for {
+		page, err := e.getPage(pageID)
+		if err != nil {
+			return nil, err
+		}
+
+		record, ok := e.getRecord(page, rowID)
+		if ok {
+			return record, nil
+		}
+
+		pageID = page.NextPageID
+		if pageID == 0 {
+			break
+		}
+	}
+
+	return nil, dberrors.ErrRecordNotFound
 }
 
 func (e *Engine) RangeScan() ([]engines.Record, error) {
@@ -122,4 +151,13 @@ func (e *Engine) writePage(page *Page) error {
 	}
 
 	return nil
+}
+
+func (e *Engine) getRecord(page *Page, rowID int64) ([]byte, bool) {
+	pointers, exists := page.RecordMap[rowID]
+	if !exists {
+		return nil, false
+	}
+
+	return page.Data[pointers[0] : pointers[0]+pointers[1]], true
 }

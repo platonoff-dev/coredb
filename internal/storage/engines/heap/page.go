@@ -9,7 +9,7 @@ const (
 )
 
 type Page struct {
-	RecordMap       map[int64]uint64 // Row ID to Record Offset mapping
+	RecordMap       map[int64][]uint64 // Row ID to Record Offset mapping and segment length
 	Data            []byte
 	ID              int64
 	FreeSpaceOffset uint64
