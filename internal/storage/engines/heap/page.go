@@ -2,6 +2,7 @@ package heap
 
 import (
 	"encoding/binary"
+	"errors"
 )
 
 const (
@@ -46,5 +47,52 @@ func (p *Page) UnmarshalBinary(id int64, data []byte) error {
 	p.NextPageID = nextPageID
 
 	p.Data = data[ptr:]
+	return nil
+}
+
+func (p *Page) getRecord(rowID int64) ([]byte, bool) {
+	pointers, exists := p.RecordMap[rowID]
+	if !exists {
+		return nil, false
+	}
+
+	return p.Data[pointers[0] : pointers[0]+pointers[1]], true
+}
+
+// TODO:  When updating a record calclulation of frespace is little bit different.
+// We need to find old record remove it then calculate space for new record and only if it still fits we can write it.
+// TODO: Write test first to handle this case.
+func (p *Page) setRecord(rowID int64, record []byte) error {
+	if uint64(len(record)) > p.WritableSpace {
+		return errors.New("not enough space")
+	}
+
+	pointers := p.RecordMap[rowID]
+	if len(pointers) == 0 {
+		pointers = make([]uint64, 2)
+	}
+
+	pointers[0] = uint64(len(p.Data))
+	pointers[1] = uint64(len(record))
+	p.RecordMap[rowID] = pointers
+
+	p.Data = append(p.Data, record...)
+	p.WritableSpace -= uint64(len(record))
+	p.FreeSpaceOffset += uint64(len(record))
+
+	return nil
+}
+
+func (p *Page) deleteRecord(rowID int64) error {
+	pointers, exists := p.RecordMap[rowID]
+	if !exists {
+		return errors.New("record not found")
+	}
+
+	delete(p.RecordMap, rowID)
+
+	p.WritableSpace += pointers[1]
+	p.FreeSpaceOffset -= pointers[1]
+
 	return nil
 }
