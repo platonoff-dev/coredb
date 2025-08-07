@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	dberrors "github.com/platonoff-dev/coredb/internal/errors"
-	"github.com/platonoff-dev/coredb/internal/storage/engines"
 	"github.com/platonoff-dev/coredb/internal/storage/pager"
 )
 
@@ -24,7 +23,7 @@ func NewHeapEngine(pageManager pager.FilePageManager) Engine {
 	}
 }
 
-func (e *Engine) Insert(rowID int64, record engines.Record) error {
+func (e *Engine) Insert(rowID int64, record Record) error {
 	pageID := e.tableMetadata.HeadPageID
 	var writablePage, currentPage *Page
 	var err error
@@ -34,7 +33,7 @@ func (e *Engine) Insert(rowID int64, record engines.Record) error {
 			return err
 		}
 
-		if currentPage.WritableSpace >= uint64(len(record)) {
+		if currentPage.WritableSpace >= uint64(len(record.Data)) {
 			writablePage = currentPage
 			break
 		}
@@ -51,7 +50,7 @@ func (e *Engine) Insert(rowID int64, record engines.Record) error {
 		}
 	}
 
-	err = writablePage.setRecord(rowID, record)
+	err = writablePage.setRecord(Record{RowID: rowID, Data: record.Data})
 	if err != nil {
 		return err
 	}
@@ -64,14 +63,14 @@ func (e *Engine) Insert(rowID int64, record engines.Record) error {
 	return nil
 }
 
-func (e *Engine) Get(rowID int64) (engines.Record, error) {
+func (e *Engine) Get(rowID int64) (Record, error) {
 	page, err, ok := e.findPage(func(p *Page) bool {
 		_, ok := p.getRecord(rowID)
 		return ok
 	})
 
 	if err != nil {
-		return nil, err
+		return Record{}, err
 	}
 
 	if ok {
@@ -79,14 +78,28 @@ func (e *Engine) Get(rowID int64) (engines.Record, error) {
 		return record, nil
 	}
 
-	return nil, dberrors.ErrRecordNotFound
+	return Record{}, dberrors.ErrRecordNotFound
 }
 
-func (e *Engine) RangeScan() ([]engines.Record, error) {
-	return nil, errors.New("not implemented")
+func (e *Engine) RangeScan() ([]Record, error) {
+	records := []Record{}
+	pageID := e.tableMetadata.HeadPageID
+	for pageID != 0 {
+		page, err := e.getPage(pageID)
+		if err != nil {
+			return nil, err
+		}
+
+		// Collect all records from the current page
+		records = append(records, page.listRecords()...)
+
+		pageID = page.NextPageID
+	}
+
+	return records, nil
 }
 
-func (e *Engine) Update(rowID int, record engines.Record) error {
+func (e *Engine) Update(rowID int, record Record) error {
 	page, err, ok := e.findPage(func(p *Page) bool {
 		_, exists := p.getRecord(int64(rowID))
 		return exists
@@ -98,7 +111,12 @@ func (e *Engine) Update(rowID int, record engines.Record) error {
 		return dberrors.ErrRecordNotFound
 	}
 
-	err = page.setRecord(int64(rowID), record)
+	err = page.setRecord(Record{RowID: int64(rowID), Data: record.Data})
+	if err != nil {
+		return err
+	}
+
+	err = e.writePage(page)
 	if err != nil {
 		return err
 	}

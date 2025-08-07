@@ -50,35 +50,64 @@ func (p *Page) UnmarshalBinary(id int64, data []byte) error {
 	return nil
 }
 
-func (p *Page) getRecord(rowID int64) ([]byte, bool) {
-	pointers, exists := p.RecordMap[rowID]
-	if !exists {
-		return nil, false
+type Record struct {
+	Data  []byte
+	RowID int64
+}
+
+func (p *Page) listRecords() []Record {
+	records := make([]Record, 0, len(p.RecordMap))
+
+	for rowID, pointers := range p.RecordMap {
+		if len(pointers) < 2 {
+			continue // Invalid record, skip it
+		}
+
+		start := pointers[0]
+		length := pointers[1]
+
+		record := Record{
+			RowID: rowID,
+			Data:  p.Data[start : start+length],
+		}
+		records = append(records, record)
 	}
 
-	return p.Data[pointers[0] : pointers[0]+pointers[1]], true
+	return records
+}
+
+func (p *Page) getRecord(rowID int64) (Record, bool) {
+	pointers, exists := p.RecordMap[rowID]
+	if !exists {
+		return Record{}, false
+	}
+
+	return Record{
+		RowID: rowID,
+		Data:  p.Data[pointers[0] : pointers[0]+pointers[1]],
+	}, true
 }
 
 // TODO:  When updating a record calclulation of frespace is little bit different.
 // We need to find old record remove it then calculate space for new record and only if it still fits we can write it.
 // TODO: Write test first to handle this case.
-func (p *Page) setRecord(rowID int64, record []byte) error {
-	if uint64(len(record)) > p.WritableSpace {
+func (p *Page) setRecord(record Record) error {
+	if uint64(len(record.Data)) > p.WritableSpace {
 		return errors.New("not enough space")
 	}
 
-	pointers := p.RecordMap[rowID]
+	pointers := p.RecordMap[record.RowID]
 	if len(pointers) == 0 {
 		pointers = make([]uint64, 2)
 	}
 
 	pointers[0] = uint64(len(p.Data))
-	pointers[1] = uint64(len(record))
-	p.RecordMap[rowID] = pointers
+	pointers[1] = uint64(len(record.Data))
+	p.RecordMap[record.RowID] = pointers
 
-	p.Data = append(p.Data, record...)
-	p.WritableSpace -= uint64(len(record))
-	p.FreeSpaceOffset += uint64(len(record))
+	p.Data = append(p.Data, record.Data...)
+	p.WritableSpace -= uint64(len(record.Data))
+	p.FreeSpaceOffset += uint64(len(record.Data))
 
 	return nil
 }
