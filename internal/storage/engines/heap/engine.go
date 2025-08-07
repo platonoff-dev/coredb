@@ -9,7 +9,6 @@ import (
 
 type TableMetadata struct {
 	HeadPageID int64
-	TailPageID int64
 }
 
 type Engine struct {
@@ -17,13 +16,7 @@ type Engine struct {
 	tableMetadata TableMetadata
 }
 
-func NewHeapEngine(pageManager pager.FilePageManager) Engine {
-	return Engine{
-		pageManager: pageManager,
-	}
-}
-
-func (e *Engine) Insert(rowID int64, record Record) error {
+func (e *Engine) Insert(record Record) error {
 	pageID := e.tableMetadata.HeadPageID
 	var writablePage, currentPage *Page
 	var err error
@@ -50,7 +43,7 @@ func (e *Engine) Insert(rowID int64, record Record) error {
 		}
 	}
 
-	err = writablePage.setRecord(Record{RowID: rowID, Data: record.Data})
+	err = writablePage.setRecord(record)
 	if err != nil {
 		return err
 	}
@@ -175,7 +168,7 @@ func (e *Engine) writePage(page *Page) error {
 		return errors.New("page cannot be nil")
 	}
 
-	binaryPage, err := page.MarshalBinary()
+	binaryPage, err := page.MarshalBinary(int(e.pageManager.PageSize))
 	if err != nil {
 		return err
 	}

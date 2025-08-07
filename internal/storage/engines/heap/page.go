@@ -19,15 +19,18 @@ type Page struct {
 	Type            byte
 }
 
-func (p *Page) MarshalBinary() ([]byte, error) {
+func (p *Page) MarshalBinary(size int) ([]byte, error) {
 	data := []byte{}
 	data = append(data, p.Type)
-	binary.PutUvarint(data, p.FreeSpaceOffset)
-	binary.PutUvarint(data, p.WritableSpace)
-	binary.PutVarint(data, p.NextPageID)
+	data = binary.AppendUvarint(data, p.FreeSpaceOffset)
+	data = binary.AppendUvarint(data, p.WritableSpace)
+	data = binary.AppendVarint(data, p.NextPageID)
 	data = append(data, p.Data...)
 
-	return data, nil
+	result := make([]byte, size)
+	copy(result, data)
+
+	return append(data, make([]byte, size-len(data))...), nil // TODO: looks ugly find better solution
 }
 
 func (p *Page) UnmarshalBinary(id int64, data []byte) error {
