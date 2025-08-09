@@ -1,4 +1,3 @@
-// Package storage provides functionality for managing database storage layer.
 package pager
 
 import (

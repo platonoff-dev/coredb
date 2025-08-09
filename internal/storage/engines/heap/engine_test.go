@@ -13,7 +13,7 @@ func prepareEmptyEngine(t *testing.T) *Engine {
 	pageManager := pager.FilePageManager{
 		File:     &pager.MemoryFile{Data: make([]byte, 0)},
 		Header:   pager.DBHeader{},
-		PageSize: uint32(4096),
+		PageSize: 4096,
 	}
 	engine := &Engine{
 		pageManager: pageManager,
@@ -25,24 +25,9 @@ func prepareEmptyEngine(t *testing.T) *Engine {
 	id2, err := engine.pageManager.Allocate()
 	require.NoError(t, err)
 
-	require.NoError(t, engine.writePage(&Page{
-		ID:              id1,
-		Type:            pager.PageTypeHeap,
-		FreeSpaceOffset: 0,
-		WritableSpace:   4096 - HeaderSize,
-		NextPageID:      id2,
-		Data:            make([]byte, 0),
-		RecordMap:       make(map[int64][]uint64),
-	}))
+	require.NoError(t, engine.writePage(newPage(id1, pager.PageTypeHeap, 4096)))
 
-	require.NoError(t, engine.writePage(&Page{
-		ID:              id2,
-		Type:            pager.PageTypeHeap,
-		FreeSpaceOffset: 0,
-		WritableSpace:   4096 - HeaderSize,
-		Data:            make([]byte, 0),
-		RecordMap:       make(map[int64][]uint64),
-	}))
+	require.NoError(t, engine.writePage(newPage(id2, pager.PageTypeHeap, 4096)))
 
 	engine.tableMetadata = TableMetadata{
 		HeadPageID: id1,

@@ -40,7 +40,6 @@ linters:
   - revive
   - rowserrcheck
   - sqlclosecheck
-  - thelper
   - tparallel
   - unconvert
   - unparam

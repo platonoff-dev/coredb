@@ -12,7 +12,7 @@ func TestFilePageManager_Read(t *testing.T) {
 	t.Run("should read existing page successfully", func(t *testing.T) {
 		// Given
 		manager := createTestManager(t)
-		var pageID int64 = 1
+		pageID := 1
 
 		// When
 		page, err := manager.Read(pageID)
@@ -20,13 +20,13 @@ func TestFilePageManager_Read(t *testing.T) {
 		// Then
 		require.NoError(t, err)
 		assert.NotNil(t, page)
-		assert.Equal(t, len(page), int(manager.PageSize))
+		assert.Equal(t, len(page), manager.PageSize)
 	})
 
 	t.Run("should handle invalid page ID", func(t *testing.T) {
 		// Given
 		manager := createTestManager(t)
-		invalidPageID := int64(0) // Page ID 0 is typically invalid
+		invalidPageID := 0 // Page ID 0 is typically invalid
 
 		// When
 		page, err := manager.Read(invalidPageID)
@@ -127,7 +127,7 @@ func TestFilePageManager_Free(t *testing.T) {
 	t.Run("should handle freeing invalid page ID", func(t *testing.T) {
 		// Given
 		manager := createTestManager(t)
-		invalidPageID := int64(999)
+		invalidPageID := 999
 
 		// When
 		err := manager.Free(invalidPageID)
@@ -153,7 +153,7 @@ func TestFilePageManager_EdgeCases(t *testing.T) {
 		assert.Nil(t, page)
 		assert.Error(t, err)
 
-		err = manager.Write(int64(1), []byte("test data"))
+		err = manager.Write(1, []byte("test data"))
 		assert.Error(t, err)
 
 		pageID, err := manager.Allocate()
@@ -194,6 +194,6 @@ func createTestHeader() DBHeader {
 		Version:        1,
 		PageSize:       4096,
 		FreeListPageID: 1,
-		PageCount:      uint32(3), // Assume 3 pages for testing
+		PageCount:      3, // Assume 3 pages for testing
 	}
 }

@@ -15,7 +15,7 @@ const (
 
 func Init(
 	filePath string,
-	pageSize uint32,
+	pageSize int,
 ) (*pager.FilePageManager, error) {
 	file, isNew, err := openFile(filePath)
 	if err != nil {
@@ -66,7 +66,7 @@ func openFile(filePath string) (file pager.DBFileOperator, isNew bool, err error
 	return
 }
 
-func initHeader(file pager.DBFileOperator, pageSize uint32) (*pager.DBHeader, error) {
+func initHeader(file pager.DBFileOperator, pageSize int) (*pager.DBHeader, error) {
 	header := &pager.DBHeader{
 		Magic:          []byte(Magic),
 		Version:        1,

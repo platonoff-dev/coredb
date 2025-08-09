@@ -8,33 +8,57 @@ import (
 
 type DBHeader struct {
 	Magic          []byte // Magic number to identify the database file
-	Version        uint16 // Version of the database format
-	PageSize       uint32 // Size of each page in the database
-	FreeListPageID uint32 // Page ID of the freelist page
-	PageCount      uint32 // Total number of pages in the database
+	Version        int    // Version of the database format
+	PageSize       int    // Size of each page in the database
+	FreeListPageID int    // Page ID of the freelist page
+	PageCount      int    // Total number of pages in the database
 }
 
 func (h *DBHeader) Encode() []byte {
-	data := []byte{}
+	data := make([]byte, 4096)
+	offset := 0
 
-	data = append(data, h.Magic...)
-	data = binary.LittleEndian.AppendUint16(data, h.Version)
-	data = binary.LittleEndian.AppendUint32(data, h.PageSize)
-	data = binary.LittleEndian.AppendUint32(data, h.FreeListPageID)
-	data = binary.LittleEndian.AppendUint32(data, h.PageCount)
+	copy(data[offset:], h.Magic)
+	offset += len(h.Magic)
+
+	n := binary.PutVarint(data[offset:], int64(h.Version))
+	offset += n
+
+	n = binary.PutVarint(data[offset:], int64(h.PageSize))
+	offset += n
+
+	n = binary.PutVarint(data[offset:], int64(h.FreeListPageID))
+	offset += n
+
+	_ = binary.PutVarint(data[offset:], int64(h.PageCount))
+
 	return data
 }
 
 func (h *DBHeader) Decode(data []byte) error {
-	if len(data) < 20 {
+	if len(data) < 4096 {
 		return dberrors.ErrInvalidFileFormat
 	}
 
-	h.Magic = data[:6]
-	h.Version = binary.LittleEndian.Uint16(data[6:8])
-	h.PageSize = binary.LittleEndian.Uint32(data[8:12])
-	h.FreeListPageID = binary.LittleEndian.Uint32(data[12:16])
-	h.PageCount = binary.LittleEndian.Uint32(data[16:20])
+	offset := 0
+
+	h.Magic = data[offset : offset+6]
+	offset += 6
+
+	version, n := binary.Varint(data[offset:])
+	offset += n
+	h.Version = int(version)
+
+	pageSize, n := binary.Varint(data[offset:])
+	offset += n
+	h.PageSize = int(pageSize)
+
+	freeListPageID, n := binary.Varint(data[offset:])
+	offset += n
+	h.FreeListPageID = int(freeListPageID)
+
+	pageCount, _ := binary.Varint(data[offset:])
+	h.PageCount = int(pageCount)
 
 	return nil
 }

@@ -15,10 +15,10 @@ type DBFileOperator interface {
 type FilePageManager struct {
 	File     DBFileOperator
 	Header   DBHeader
-	PageSize uint32
+	PageSize int
 }
 
-func (m *FilePageManager) Read(pageID int64) ([]byte, error) {
+func (m *FilePageManager) Read(pageID int) ([]byte, error) {
 	if pageID == 0 {
 		return nil, dberrors.ErrInvalidPageID
 	}
@@ -28,8 +28,8 @@ func (m *FilePageManager) Read(pageID int64) ([]byte, error) {
 	}
 
 	data := make([]byte, m.PageSize)
-	offset := pageID * int64(m.PageSize)
-	_, err := m.File.ReadAt(data, offset)
+	offset := pageID * m.PageSize
+	_, err := m.File.ReadAt(data, int64(offset))
 	if err != nil {
 		return nil, err
 	}
@@ -37,35 +37,35 @@ func (m *FilePageManager) Read(pageID int64) ([]byte, error) {
 	return data, nil
 }
 
-func (m *FilePageManager) Write(id int64, data []byte) error {
+func (m *FilePageManager) Write(id int, data []byte) error {
 	if m.File == nil {
 		return dberrors.ErrInvalidFileFormat
 	}
 
-	if data == nil || len(data) != int(m.PageSize) {
+	if data == nil || len(data) != m.PageSize {
 		return dberrors.ErrInvalidPageFormat
 	}
 
-	_, err := m.File.WriteAt(data, int64(m.Header.PageCount*m.PageSize))
+	_, err := m.File.WriteAt(data, int64(id*m.PageSize))
 	return err
 }
 
-func (m *FilePageManager) Allocate() (int64, error) {
+func (m *FilePageManager) Allocate() (int, error) {
 	if m.File == nil {
 		return 0, dberrors.ErrInvalidFileFormat
 	}
 
-	err := m.File.Truncate(int64(m.Header.PageCount+1) * int64(m.PageSize))
+	err := m.File.Truncate(int64((m.Header.PageCount + 1) * m.PageSize))
 	if err != nil {
 		return 0, err
 	}
 
 	m.Header.PageCount++
 
-	return int64(m.Header.PageCount - 1), nil
+	return m.Header.PageCount - 1, nil
 }
 
-func (m *FilePageManager) Free(id int64) error {
+func (m *FilePageManager) Free(id int) error {
 	if id == 0 {
 		return dberrors.ErrInvalidPageID
 	}
