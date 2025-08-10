@@ -36,7 +36,7 @@ func (h *DBHeader) Encode() []byte {
 }
 
 func (h *DBHeader) Decode(data []byte) error {
-	if len(data) < 4096 {
+	if len(data) < headerSize {
 		return dberrors.ErrInvalidFileFormat
 	}
 
