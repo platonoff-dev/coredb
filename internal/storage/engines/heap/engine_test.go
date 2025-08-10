@@ -11,8 +11,11 @@ func prepareEmptyEngine(t *testing.T) *Engine {
 	t.Helper()
 
 	pageManager := pager.FilePageManager{
-		File:     &pager.MemoryFile{Data: make([]byte, 0)},
-		Header:   pager.DBHeader{},
+		File: &pager.MemoryFile{Data: make([]byte, 0)},
+		Header: pager.DBHeader{
+			PageCount: 1,
+			PageSize:  4096,
+		},
 		PageSize: 4096,
 	}
 	engine := &Engine{
@@ -62,15 +65,10 @@ func TestGetRecord(t *testing.T) {
 		name         string
 	}{
 		{
-			name:   "GetRecord_Basic",
-			engine: prepareEngineWithRecords(t),
-			setupFunc: func(t *testing.T, e *Engine) {
-				t.Helper()
-			},
-
+			name:      "GetRecord_Basic",
+			engine:    prepareEngineWithRecords(t),
+			setupFunc: func(t *testing.T, e *Engine) {},
 			validateFunc: func(t *testing.T, e *Engine) {
-				t.Helper()
-
 				record, err := e.Get(1)
 				require.NoError(t, err)
 				require.Equal(t, []byte("Record 1"), record.Data)

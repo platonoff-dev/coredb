@@ -26,7 +26,7 @@ func (e *Engine) Insert(record Record) error {
 			return err
 		}
 
-		if currentPage.WritableSpace >= len(record.Data) {
+		if currentPage.writableSpaceLength() >= len(record.Data) {
 			writablePage = currentPage
 			break
 		}
@@ -58,7 +58,7 @@ func (e *Engine) Insert(record Record) error {
 
 func (e *Engine) Get(rowID int) (Record, error) {
 	page, err, ok := e.findPage(func(p *Page) bool {
-		_, ok := p.getRecord(rowID)
+		_, ok := p.RecordMap[rowID]
 		return ok
 	})
 
@@ -168,7 +168,7 @@ func (e *Engine) writePage(page *Page) error {
 		return errors.New("page cannot be nil")
 	}
 
-	binaryPage, err := page.MarshalBinary(e.pageManager.PageSize)
+	binaryPage, err := page.MarshalBinary()
 	if err != nil {
 		return err
 	}
@@ -201,21 +201,13 @@ func (e *Engine) appendPage(page *Page) (*Page, error) {
 		return nil, err
 	}
 
-	newPage := &Page{
-		ID:              newPageID,
-		FreeSpaceOffset: e.pageManager.PageSize,
-		WritableSpace:   0,
-		NextPageID:      0,
-		Type:            pager.PageTypeHeap,
-		RecordMap:       make(map[int][]int),
-	}
-	newPage.WritableSpace = e.pageManager.PageSize - page.requiredHeaderSize()
-	err = e.writePage(newPage)
+	nextPage := newPage(newPageID, pager.PageTypeHeap, e.pageManager.PageSize)
+	err = e.writePage(nextPage)
 	if err != nil {
 		return nil, err
 	}
 
-	return newPage, nil
+	return nextPage, nil
 }
 
 func (e *Engine) findPage(cond func(*Page) bool) (*Page, error, bool) {

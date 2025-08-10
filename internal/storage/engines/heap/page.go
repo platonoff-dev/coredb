@@ -6,13 +6,14 @@ import (
 )
 
 type Page struct {
-	RecordMap       map[int][]int // Row ID to Record Offset mapping and segment length
-	Data            []byte
-	ID              int
-	FreeSpaceOffset int
-	WritableSpace   int
-	NextPageID      int
-	Type            byte
+	RecordMap  map[int][]int // Row ID to Record Offset mapping and segment length
+	Data       []byte
+	ID         int
+	NextPageID int
+	Type       byte
+
+	writableSpacePtr int
+	size             int
 }
 
 type Record struct {
@@ -20,18 +21,18 @@ type Record struct {
 	RowID int
 }
 
-func newPage(id int, pageType byte, pageSize int) *Page {
+func newPage(id int, pageType byte, size int) *Page {
 	result := &Page{
-		ID:              id,
-		Type:            pageType,
-		FreeSpaceOffset: 0,
-		NextPageID:      0,
+		ID:         id,
+		Type:       pageType,
+		NextPageID: 0,
+		RecordMap:  make(map[int][]int),
 
-		RecordMap: make(map[int][]int),
-		Data:      make([]byte, 0),
+		size: size,
 	}
 
-	result.WritableSpace = pageSize - result.requiredHeaderSize()
+	result.Data = make([]byte, size-result.requiredHeaderSize())
+	result.writableSpacePtr = -1 // End of page
 
 	return result
 }
@@ -43,21 +44,18 @@ func (p *Page) requiredHeaderSize() int {
 	return staticVarsSize + recordMapSize
 }
 
-func (p *Page) MarshalBinary(size int) ([]byte, error) {
-	if size < p.requiredHeaderSize() {
-		return nil, errors.New("page: invalid size")
-	}
+func (p *Page) writableSpaceLength() int {
+	return p.size + p.writableSpacePtr - p.requiredHeaderSize()
+}
 
-	data := make([]byte, size)
+func (p *Page) MarshalBinary() ([]byte, error) {
+	data := make([]byte, p.size)
 	offset := 0
 
 	data[offset] = p.Type
 	offset++
 
-	n := binary.PutVarint(data[offset:], int64(p.FreeSpaceOffset))
-	offset += n
-
-	n = binary.PutVarint(data[offset:], int64(p.WritableSpace))
+	n := binary.PutVarint(data[offset:], int64(p.writableSpacePtr))
 	offset += n
 
 	n = binary.PutVarint(data[offset:], int64(p.NextPageID))
@@ -78,7 +76,8 @@ func (p *Page) MarshalBinary(size int) ([]byte, error) {
 		offset += n
 	}
 
-	copy(data[offset:], data)
+	from := len(data) - len(p.Data)
+	copy(data[from:], p.Data)
 
 	return data, nil
 }
@@ -90,12 +89,8 @@ func (p *Page) UnmarshalBinary(id int, data []byte) error {
 	p.Type = data[0]
 	offset++
 
-	freeSpaceOffset, n := binary.Varint(data[offset:])
-	p.FreeSpaceOffset = int(freeSpaceOffset)
-	offset += n
-
-	writableSpace, n := binary.Varint(data[offset:])
-	p.WritableSpace = int(writableSpace)
+	writableSpacePtr, n := binary.Varint(data[offset:])
+	p.writableSpacePtr = int(writableSpacePtr)
 	offset += n
 
 	nextPageID, n := binary.Varint(data[offset:])
@@ -119,7 +114,10 @@ func (p *Page) UnmarshalBinary(id int, data []byte) error {
 		p.RecordMap[int(recordID)] = []int{int(start), int(length)}
 	}
 
-	p.Data = data[offset:]
+	p.Data = data[p.requiredHeaderSize():]
+
+	p.size = len(data)
+
 	return nil
 }
 
@@ -150,32 +148,31 @@ func (p *Page) getRecord(rowID int) (Record, bool) {
 		return Record{}, false
 	}
 
+	from := len(p.Data) + pointers[0] + 1
+	to := len(p.Data) + pointers[1] + 1
 	return Record{
 		RowID: rowID,
-		Data:  p.Data[pointers[0] : pointers[0]+pointers[1]],
+		Data:  p.Data[from:to],
 	}, true
 }
 
-// TODO:  When updating a record calclulation of frespace is little bit different.
+// TODO:  When updating a record calculation of free space is little bit different.
 // We need to find old record remove it then calculate space for new record and only if it still fits we can write it.
 // TODO: Write test first to handle this case.
 func (p *Page) setRecord(record Record) error {
-	if len(record.Data) > p.WritableSpace {
+	if len(record.Data) > p.writableSpaceLength() {
 		return errors.New("not enough space")
 	}
 
-	pointers := p.RecordMap[record.RowID]
-	if len(pointers) == 0 {
-		pointers = make([]int, 2)
-	}
+	from := p.writableSpacePtr - len(record.Data)
+	to := p.writableSpacePtr
 
-	pointers[0] = len(p.Data)
-	pointers[1] = len(record.Data)
-	p.RecordMap[record.RowID] = pointers
+	fromIdx := len(p.Data) + from + 1
+	toIdx := len(p.Data) + to + 1
 
-	p.Data = append(p.Data, record.Data...)
-	p.WritableSpace -= len(record.Data)
-	p.FreeSpaceOffset += len(record.Data)
+	copy(p.Data[fromIdx:toIdx], record.Data)
+	p.writableSpacePtr -= len(record.Data)
+	p.RecordMap[record.RowID] = []int{from, to}
 
 	return nil
 }
@@ -187,9 +184,7 @@ func (p *Page) deleteRecord(rowID int) error {
 	}
 
 	delete(p.RecordMap, rowID)
-
-	p.WritableSpace += pointers[1]
-	p.FreeSpaceOffset -= pointers[1]
+	p.writableSpacePtr += pointers[1] - pointers[0]
 
 	return nil
 }

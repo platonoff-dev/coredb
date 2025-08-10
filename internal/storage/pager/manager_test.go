@@ -92,7 +92,7 @@ func TestFilePageManager_Allocate(t *testing.T) {
 
 		// Then
 		assert.NoError(t, err)
-		assert.Greater(t, id, int64(0))
+		assert.Greater(t, id, 0)
 	})
 
 	t.Run("should allocate multiple pages with different IDs", func(t *testing.T) {
