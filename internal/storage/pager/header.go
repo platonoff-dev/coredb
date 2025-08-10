@@ -15,7 +15,7 @@ type DBHeader struct {
 }
 
 func (h *DBHeader) Encode() []byte {
-	data := make([]byte, 4096)
+	data := make([]byte, HeaderSize)
 	offset := 0
 
 	copy(data[offset:], h.Magic)
