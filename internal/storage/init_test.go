@@ -16,7 +16,7 @@ func TestInit(t *testing.T) {
 		cleanup  func(t *testing.T, filePath string)
 		name     string
 		filePath string
-		pageSize uint32
+		pageSize int
 	}{
 		{
 			name:     "new memory file",
@@ -148,7 +148,7 @@ func TestInit(t *testing.T) {
 func TestInitValidation(t *testing.T) {
 	tests := []struct {
 		name        string
-		pageSize    uint32
+		pageSize    int
 		expectError bool
 	}{
 		{

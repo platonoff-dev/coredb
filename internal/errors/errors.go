@@ -9,4 +9,6 @@ var (
 
 	ErrInvalidPageFormat = errors.New("invalid page format")
 	ErrInvalidPageType   = errors.New("invalid page type")
+
+	ErrRecordNotFound = errors.New("record not found")
 )
