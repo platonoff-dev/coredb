@@ -115,10 +115,10 @@ func TestFilePageManager_Free(t *testing.T) {
 	t.Run("should free allocated page", func(t *testing.T) {
 		// Given
 		manager := createTestManager(t)
-		page, _ := manager.Allocate()
+		pageID, _ := manager.Allocate()
 
 		// When
-		err := manager.Free(page)
+		err := manager.Free(pageID)
 
 		// Then
 		assert.NoError(t, err)

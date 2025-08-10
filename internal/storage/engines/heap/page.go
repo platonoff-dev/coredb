@@ -16,6 +16,10 @@ type Page struct {
 	size             int
 }
 
+const (
+	EndOfPage = -1 // Represents the end of the writable space in the page
+)
+
 type Record struct {
 	Data  []byte
 	RowID int

@@ -6,6 +6,10 @@ import (
 	dberrors "github.com/platonoff-dev/coredb/internal/errors"
 )
 
+const (
+	HeaderSize = 4096
+)
+
 type DBHeader struct {
 	Magic          []byte // Magic number to identify the database file
 	Version        int    // Version of the database format
@@ -36,7 +40,7 @@ func (h *DBHeader) Encode() []byte {
 }
 
 func (h *DBHeader) Decode(data []byte) error {
-	if len(data) < headerSize {
+	if len(data) < HeaderSize {
 		return dberrors.ErrInvalidFileFormat
 	}
 
