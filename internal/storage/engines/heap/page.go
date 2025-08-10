@@ -32,7 +32,7 @@ func newPage(id int, pageType byte, size int) *Page {
 	}
 
 	result.Data = make([]byte, size-result.requiredHeaderSize())
-	result.writableSpacePtr = -1 // End of page
+	result.writableSpacePtr = EndOfPage // End of page
 
 	return result
 }
