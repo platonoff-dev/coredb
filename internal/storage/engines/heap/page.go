@@ -128,14 +128,17 @@ func (p *Page) listRecords() []Record {
 		if len(pointers) < 2 {
 			continue // Invalid record, skip it
 		}
+		// Pointers are stored as negative offsets from end of data slice (inclusive)
+		startPtr := pointers[0]
+		endPtr := pointers[1]
 
-		start := pointers[0]
-		length := pointers[1]
-
-		record := Record{
-			RowID: rowID,
-			Data:  p.Data[start : start+length],
+		from := len(p.Data) + startPtr + 1
+		to := len(p.Data) + endPtr + 1
+		if from < 0 || to > len(p.Data) || from > to { // Defensive bounds check
+			continue
 		}
+
+		record := Record{RowID: rowID, Data: p.Data[from:to]}
 		records = append(records, record)
 	}
 
