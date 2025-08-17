@@ -32,9 +32,7 @@ func prepareEmptyEngine(t *testing.T) *Engine {
 
 	require.NoError(t, engine.writePage(newPage(id2, pager.PageTypeHeap, 4096)))
 
-	engine.tableMetadata = TableMetadata{
-		HeadPageID: id1,
-	}
+	engine.headPageID = id1
 
 	return engine
 }

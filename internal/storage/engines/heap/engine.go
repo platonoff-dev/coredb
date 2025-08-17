@@ -7,17 +7,13 @@ import (
 	"github.com/platonoff-dev/coredb/internal/storage/pager"
 )
 
-type TableMetadata struct {
-	HeadPageID int
-}
-
 type Engine struct {
-	pageManager   pager.FilePageManager
-	tableMetadata TableMetadata
+	pageManager pager.FilePageManager
+	headPageID  int
 }
 
 func (e *Engine) Insert(record Record) error {
-	pageID := e.tableMetadata.HeadPageID
+	pageID := e.headPageID
 	var writablePage, currentPage *Page
 	var err error
 	for {
@@ -76,7 +72,7 @@ func (e *Engine) Get(rowID int) (Record, error) {
 
 func (e *Engine) RangeScan() ([]Record, error) {
 	records := []Record{}
-	pageID := e.tableMetadata.HeadPageID
+	pageID := e.headPageID
 	for pageID != 0 {
 		page, err := e.getPage(pageID)
 		if err != nil {
@@ -211,7 +207,7 @@ func (e *Engine) appendPage(page *Page) (*Page, error) {
 }
 
 func (e *Engine) findPage(cond func(*Page) bool) (*Page, error, bool) {
-	pageID := e.tableMetadata.HeadPageID
+	pageID := e.headPageID
 	for {
 		page, err := e.getPage(pageID)
 		if err != nil {
