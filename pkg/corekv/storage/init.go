@@ -3,8 +3,8 @@ package storage
 import (
 	"os"
 
-	dberrors "github.com/platonoff-dev/coredb/internal/errors"
-	"github.com/platonoff-dev/coredb/internal/storage/pager"
+	dberrors "github.com/platonoff-dev/coredb/pkg/corekv/errors"
+	pager2 "github.com/platonoff-dev/coredb/pkg/corekv/storage/pager"
 )
 
 const (
@@ -16,13 +16,13 @@ const (
 func Init(
 	filePath string,
 	pageSize int,
-) (*pager.FilePageManager, error) {
+) (*pager2.FilePageManager, error) {
 	file, isNew, err := openFile(filePath)
 	if err != nil {
 		return nil, err
 	}
 
-	var header *pager.DBHeader
+	var header *pager2.DBHeader
 	if isNew {
 		header, err = initHeader(file, pageSize)
 		if err != nil {
@@ -39,18 +39,18 @@ func Init(
 		return nil, dberrors.ErrInvalidFileFormat
 	}
 
-	return &pager.FilePageManager{
+	return &pager2.FilePageManager{
 		Header:   *header,
 		File:     file,
 		PageSize: pageSize,
 	}, nil
 }
 
-func openFile(filePath string) (file pager.DBFileOperator, isNew bool, err error) {
+func openFile(filePath string) (file pager2.DBFileOperator, isNew bool, err error) {
 	if filePath == memoryFilePath {
 		isNew = true
 		err = nil
-		file = &pager.MemoryFile{
+		file = &pager2.MemoryFile{
 			Data: make([]byte, 0),
 		}
 		return
@@ -66,8 +66,8 @@ func openFile(filePath string) (file pager.DBFileOperator, isNew bool, err error
 	return
 }
 
-func initHeader(file pager.DBFileOperator, pageSize int) (*pager.DBHeader, error) {
-	header := &pager.DBHeader{
+func initHeader(file pager2.DBFileOperator, pageSize int) (*pager2.DBHeader, error) {
+	header := &pager2.DBHeader{
 		Magic:          []byte(Magic),
 		Version:        1,
 		PageSize:       pageSize,
@@ -87,14 +87,14 @@ func initHeader(file pager.DBFileOperator, pageSize int) (*pager.DBHeader, error
 	return header, nil
 }
 
-func readHeader(file pager.DBFileOperator) (*pager.DBHeader, error) {
+func readHeader(file pager2.DBFileOperator) (*pager2.DBHeader, error) {
 	headerBuff := make([]byte, dbHeaderPageSize)
 	_, err := file.ReadAt(headerBuff, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	header := &pager.DBHeader{}
+	header := &pager2.DBHeader{}
 	err = header.Decode(headerBuff)
 	if err != nil {
 		return nil, err

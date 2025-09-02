@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	dberrors "github.com/platonoff-dev/coredb/internal/errors"
+	dberrors "github.com/platonoff-dev/coredb/pkg/corekv/errors"
 )
 
 func TestInit(t *testing.T) {

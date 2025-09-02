@@ -3,7 +3,7 @@ package pager
 import (
 	"encoding/binary"
 
-	dberrors "github.com/platonoff-dev/coredb/internal/errors"
+	dberrors "github.com/platonoff-dev/coredb/pkg/corekv/errors"
 )
 
 const (
