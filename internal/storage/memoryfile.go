@@ -1,4 +1,4 @@
-package pager
+package storage
 
 import (
 	"io"

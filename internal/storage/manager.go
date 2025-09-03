@@ -1,4 +1,4 @@
-package pager
+package storage
 
 import (
 	dberrors "github.com/platonoff-dev/coredb/pkg/corekv/errors"
