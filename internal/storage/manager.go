@@ -1,7 +1,11 @@
 package storage
 
-import (
-	dberrors "github.com/platonoff-dev/coredb/pkg/corekv/errors"
+import "errors"
+
+var (
+	ErrPageNotFound  = errors.New("page not exist")
+	ErrPageInvalid   = errors.New("page invalid")
+	ErrDiskOperation = errors.New("disk operation")
 )
 
 type DBFileOperator interface {
@@ -13,18 +17,15 @@ type DBFileOperator interface {
 
 // FilePageManager manager provides abstraction to work with disk.
 type FilePageManager struct {
-	File     DBFileOperator
-	Header   DBHeader
-	PageSize int
+	File DBFileOperator
+
+	PageSize  int
+	PageCount int
 }
 
 func (m *FilePageManager) Read(pageID int) ([]byte, error) {
 	if pageID == 0 {
-		return nil, dberrors.ErrInvalidPageID
-	}
-
-	if m.File == nil {
-		return nil, dberrors.ErrInvalidFileFormat
+		return nil, ErrPageNotFound
 	}
 
 	data := make([]byte, m.PageSize)
@@ -38,12 +39,8 @@ func (m *FilePageManager) Read(pageID int) ([]byte, error) {
 }
 
 func (m *FilePageManager) Write(id int, data []byte) error {
-	if m.File == nil {
-		return dberrors.ErrInvalidFileFormat
-	}
-
 	if data == nil || len(data) != m.PageSize {
-		return dberrors.ErrInvalidPageFormat
+		return ErrPageInvalid
 	}
 
 	_, err := m.File.WriteAt(data, int64(id*m.PageSize))
@@ -51,35 +48,23 @@ func (m *FilePageManager) Write(id int, data []byte) error {
 }
 
 func (m *FilePageManager) Allocate() (int, error) {
-	if m.File == nil {
-		return 0, dberrors.ErrInvalidFileFormat
-	}
-
-	err := m.File.Truncate(int64((m.Header.PageCount + 1) * m.PageSize))
+	err := m.File.Truncate(int64((m.PageCount + 1) * m.PageSize))
 	if err != nil {
 		return 0, err
 	}
 
-	m.Header.PageCount++
+	m.PageCount++
 
-	return m.Header.PageCount - 1, nil
+	return m.PageCount - 1, nil
 }
 
 func (m *FilePageManager) Free(id int) error {
-	if id == 0 {
-		return dberrors.ErrInvalidPageID
-	}
-
-	if m.File == nil {
-		return dberrors.ErrInvalidFileFormat
-	}
-
 	_, err := m.Read(id)
 	if err != nil {
 		return err
 	}
 
-	// TODO: Actually free pages when freelist will be implemented
+	// TODO: Actually free pages when freelist will be implementedz
 
 	return nil
 }

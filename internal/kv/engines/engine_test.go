@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/platonoff-dev/coredb/internal/kv/engines/eerrors"
+	"github.com/platonoff-dev/coredb/internal/kv/engines/heap"
 	"github.com/platonoff-dev/coredb/internal/kv/engines/mem"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,7 +18,8 @@ type Engine interface {
 
 func setupEngines() map[string]Engine {
 	return map[string]Engine{
-		"mem": mem.NewMemEngine(),
+		"mem":  mem.NewMemEngine(),
+		"heap": heap.NewHeapEngine(),
 	}
 }
 
