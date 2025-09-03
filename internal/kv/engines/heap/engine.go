@@ -3,7 +3,7 @@ package heap
 import "errors"
 
 type HeapEngine struct {
-	fileManager
+	pager FilePageManager
 }
 
 func NewHeapEngine() *HeapEngine {
