@@ -1,4 +1,4 @@
-package heap
+package pager
 
 import (
 	"os"
@@ -28,7 +28,7 @@ func TestFilePageManager_Read(t *testing.T) {
 	t.Run("should handle invalid page ID", func(t *testing.T) {
 		// Given
 		manager := createTestManager(t)
-		invalidPageID := 0 // Page ID 0 is typically invalid
+		invalidPageID := 999
 
 		// When
 		page, err := manager.Read(invalidPageID)
@@ -36,7 +36,7 @@ func TestFilePageManager_Read(t *testing.T) {
 		// Then
 		assert.Nil(t, page)
 		assert.Error(t, err)
-		// Should return specific error like ErrInvalidPageID
+		assert.Equal(t, ErrPageNotExist, err)
 	})
 }
 
@@ -45,14 +45,14 @@ func TestFilePageManager_Write(t *testing.T) {
 	t.Run("should write new page successfully", func(t *testing.T) {
 		// Given
 		manager := createTestManager(t)
+		pageID, err := manager.Allocate()
+		require.NoError(t, err)
 
 		pageData := make([]byte, manager.PageSize)
 		copy(pageData, "test data") // Fill with some test data
 
-		// When
-		err := manager.Write(1, pageData)
+		err = manager.Write(pageID, pageData)
 
-		// Then
 		assert.NoError(t, err)
 	})
 
@@ -71,15 +71,30 @@ func TestFilePageManager_Write(t *testing.T) {
 	t.Run("should update existing page", func(t *testing.T) {
 		// Given
 		manager := createTestManager(t)
+		pageID, err := manager.Allocate()
+		require.NoError(t, err)
+
 		pageData := make([]byte, manager.PageSize)
 		copy(pageData, "initial data")
 
 		// When
-		err := manager.Write(1, pageData)
+		err = manager.Write(pageID, pageData)
 
 		// Then
 		assert.NoError(t, err)
 		// Verify the page was updated in storage
+	})
+
+	t.Run("should handle invalid page id", func(t *testing.T) {
+		// Given
+		manager := createTestManager(t)
+
+		// When
+		err := manager.Write(999, []byte{})
+
+		// Then
+		assert.Error(t, err)
+		assert.Equal(t, ErrPageNotExist, err)
 	})
 }
 
@@ -111,11 +126,11 @@ func TestFilePageManager_Allocate(t *testing.T) {
 	})
 }
 
-func createTestManager(t *testing.T) *FilePageManager {
+func createTestManager(t *testing.T) *PageManager {
 	f, err := os.OpenFile(t.TempDir()+"/file.kv", os.O_CREATE|os.O_RDWR, 0600)
 	require.NoError(t, err)
 
-	return &FilePageManager{
+	return &PageManager{
 		File:      f,
 		PageSize:  4096,
 		PageCount: 0,

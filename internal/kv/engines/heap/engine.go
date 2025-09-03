@@ -1,9 +1,13 @@
 package heap
 
-import "errors"
+import (
+	"errors"
+
+	pager2 "github.com/platonoff-dev/coredb/internal/kv/pager"
+)
 
 type HeapEngine struct {
-	pager FilePageManager
+	pager pager2.PageManager
 }
 
 func NewHeapEngine() *HeapEngine {
