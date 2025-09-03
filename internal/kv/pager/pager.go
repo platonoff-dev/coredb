@@ -1,4 +1,4 @@
-package heap
+package pager
 
 import (
 	"errors"
@@ -6,7 +6,7 @@ import (
 )
 
 var (
-	ErrPageNotFound  = errors.New("page not exist")
+	ErrPageNotExist  = errors.New("page not exist")
 	ErrPageInvalid   = errors.New("page invalid")
 	ErrDiskOperation = errors.New("disk operation")
 )
@@ -17,15 +17,19 @@ type DbFile interface {
 	Truncate(size int64) error
 }
 
-// FilePageManager manager provides abstraction to work with disk.
-type FilePageManager struct {
+// PageManager manager provides abstraction to work with disk.
+type PageManager struct {
 	File DbFile
 
 	PageSize  int
 	PageCount int
 }
 
-func (m *FilePageManager) Read(pageID int) ([]byte, error) {
+func (m *PageManager) Read(pageID int) ([]byte, error) {
+	if pageID < 0 || pageID >= m.PageCount {
+		return nil, ErrPageNotExist
+	}
+
 	data := make([]byte, m.PageSize)
 	offset := pageID * m.PageSize
 	_, err := m.File.ReadAt(data, int64(offset))
@@ -36,7 +40,11 @@ func (m *FilePageManager) Read(pageID int) ([]byte, error) {
 	return data, nil
 }
 
-func (m *FilePageManager) Write(id int, data []byte) error {
+func (m *PageManager) Write(id int, data []byte) error {
+	if id < 0 || id >= m.PageCount {
+		return ErrPageNotExist
+	}
+
 	if data == nil || len(data) != m.PageSize {
 		return ErrPageInvalid
 	}
@@ -49,7 +57,7 @@ func (m *FilePageManager) Write(id int, data []byte) error {
 	return nil
 }
 
-func (m *FilePageManager) Allocate() (int, error) {
+func (m *PageManager) Allocate() (int, error) {
 	m.PageCount++
 
 	err := m.File.Truncate(int64(m.PageCount * m.PageSize))
