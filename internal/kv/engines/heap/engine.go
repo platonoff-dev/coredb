@@ -2,19 +2,20 @@ package heap
 
 import (
 	"errors"
-
-	pager2 "github.com/platonoff-dev/coredb/internal/kv/pager"
 )
 
-type HeapEngine struct {
-	pager pager2.PageManager
+type Pager interface {
+	Read(pageID int) ([]byte, error)
+	Write(pageID int, data []byte) error
+	Allocate(pageID int) ([]byte, error)
 }
 
-func NewHeapEngine() *HeapEngine {
-	return &HeapEngine{}
+type HeapEngine struct {
+	pager Pager
 }
 
 func (e *HeapEngine) Put(key []byte, value []byte) error {
+
 	return errors.New("not implemented")
 }
 
