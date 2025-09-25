@@ -3,8 +3,8 @@ package engines
 import (
 	"testing"
 
-	"github.com/platonoff-dev/coredb/internal/kv/engines/eerrors"
-	"github.com/platonoff-dev/coredb/internal/kv/engines/mem"
+	"github.com/platonoff-dev/coredb/kv/engines/eerrors"
+	"github.com/platonoff-dev/coredb/kv/engines/mem"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

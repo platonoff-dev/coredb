@@ -1,7 +1,7 @@
 package mem
 
 import (
-	"github.com/platonoff-dev/coredb/internal/kv/engines/eerrors"
+	"github.com/platonoff-dev/coredb/kv/engines/eerrors"
 )
 
 type MemEngine struct {

@@ -118,6 +118,10 @@ func (e *HeapEngine) findPageWithFreeSpace(requiredSpace int, pageSize int) (int
 	return 0, nil
 }
 
+func (e *HeapEngine) appendRecord(key []byte, value []byte) error {
+	return errors.New("not implemented")
+}
+
 func calculateFreeSpaceOnPage(pageSize int, keysPositions map[string][]int) int {
 	usedSpace := 0
 	for _, position := range keysPositions {
