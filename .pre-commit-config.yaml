@@ -1,38 +1,4 @@
-# Pre-commit hooks for Go SQL database project
 repos:
-# Go specific hooks
-- repo: https://github.com/dnephin/pre-commit-golang
-  rev: v0.5.1
-  hooks:
-  - id: go-fmt
-    name: Go Format
-    description: Runs gofmt, formats Go code
-  - id: go-imports
-    name: Go Imports
-    description: Runs goimports, formats Go imports
-  - id: go-mod-tidy
-    name: Go Mod Tidy
-    description: Runs go mod tidy
-  - id: go-build
-    name: Go Build
-    description: Runs go build
-  - id: go-mod-vendor
-    name: Go Mod Vendor
-    description: Runs go mod vendor
-    stages: [ manual ]
-
-# golangci-lint (most important)
-- repo: https://github.com/golangci/golangci-lint
-  rev: v2.2.2
-  hooks:
-  - id: golangci-lint
-    name: golangci-lint
-    description: Fast linters runner for Go
-    entry: golangci-lint run --fix
-    language: golang
-    types: [ go ]
-    require_serial: true
-
 # General hooks
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v4.4.0
