@@ -2,15 +2,23 @@ package bitcask
 
 import (
 	"errors"
+	"log"
 	"os"
 	"path"
+	"sync"
+	"time"
 
 	"github.com/platonoff-dev/coredb/kv/engines/common_errors"
+)
+
+const (
+	roloverSize = 1 * 1024 * 1024 * 1024 // 1 GiB
 )
 
 type Engine struct {
 	dirPath    string
 	keyDir     map[string]KeyPointer
+	keyDirLock sync.RWMutex
 	activeFile *os.File
 }
 
@@ -40,6 +48,27 @@ func (e *Engine) Open() error {
 	}
 
 	e.activeFile = file
+
+	// TODO: Looks ugly refactor
+	go func() {
+		for {
+			time.Sleep(1 * time.Second)
+			fileInfo, err := e.activeFile.Stat()
+			if err != nil {
+				log.Printf("Failed to stat active file: %v", err)
+				continue
+			}
+
+			size := fileInfo.Size()
+			if size >= roloverSize {
+				err = e.rolloverActiveFile()
+				if err != nil {
+					log.Printf("Failed to rollover active file: %v", err)
+				}
+			}
+		}
+	}()
+
 	return nil
 }
 
@@ -157,5 +186,34 @@ func (e *Engine) Sync() error {
 }
 
 func (e *Engine) Merge() error {
+	return nil
+}
+
+func (e *Engine) rolloverActiveFile() error {
+	e.keyDirLock.Lock()
+	defer e.keyDirLock.Unlock()
+
+	fileName := e.activeFile.Name()
+	newName := time.Now().String() + ".data"
+	e.activeFile.Close()
+	err := os.Rename(fileName, newName)
+	if err != nil {
+		return err
+	}
+
+	// TODO: not atomic! Investigate risks
+	for _, v := range e.keyDir {
+		if v.file == fileName {
+			v.file = newName
+		}
+	}
+
+	f, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.ModePerm)
+	if err != nil {
+		return err
+	}
+
+	e.activeFile = f
+
 	return nil
 }
