@@ -1,8 +1,6 @@
 package mem
 
-import (
-	"github.com/platonoff-dev/coredb/kv/engines/eerrors"
-)
+import "errors"
 
 type MemEngine struct {
 	storage map[string][]byte
@@ -17,7 +15,7 @@ func NewMemEngine() *MemEngine {
 func (e *MemEngine) Get(key []byte) ([]byte, error) {
 	v, ok := e.storage[string(key)]
 	if !ok {
-		return nil, eerrors.ErrKeyNotFound
+		return nil, errors.New("key not found")
 	}
 	return v, nil
 }

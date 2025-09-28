@@ -1,10 +1,11 @@
 package bitcask
 
 import (
-	"encoding/binary"
 	"errors"
 	"os"
 	"path"
+
+	"github.com/platonoff-dev/coredb/kv/engines/common_errors"
 )
 
 type Engine struct {
@@ -14,7 +15,7 @@ type Engine struct {
 }
 
 type KeyPointer struct {
-	file   []string
+	file   string
 	offset int
 	size   int
 }
@@ -32,8 +33,8 @@ func (e *Engine) Open() error {
 		return err
 	}
 
-	filePath := path.Join(e.dirPath, "active.bitcask.cdb")
-	file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE, os.ModePerm)
+	filePath := path.Join(e.dirPath, "active.bitcask.data")
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.ModePerm)
 	if err != nil {
 		return err
 	}
@@ -52,34 +53,107 @@ func (e *Engine) Close() error {
 }
 
 func (e *Engine) Put(key []byte, value []byte) error {
-	var record []byte
-
+	// It's not really a limitation, but as we keep all keys in ram we need to limit key sizes
 	if len(key) > 255 {
 		return errors.New("key is too long")
 	}
 
-	keyLength := byte(len(key))
-	record = append(record, keyLength)
+	entry := &Entry{
+		Status: EntryStatusActive,
+		Key:    key,
+		Value:  value,
+	}
 
-	valueLength := len(value)
-	record = binary.NativeEndian.AppendUint32(record, uint32(valueLength))
+	data, err := entry.MarshalBinary()
+	if err != nil {
+		return err
+	}
 
-	record = append(record, key...)
-	record = append(record, value...)
+	fileInfo, err := e.activeFile.Stat()
+	if err != nil {
+		return err
+	}
+	offset := fileInfo.Size()
+
+	n, err := e.activeFile.Write(data)
+	if err != nil {
+		return err
+	}
+
+	if n != len(data) {
+		return errors.New("write wrong number of bytes written")
+	}
+
+	e.keyDir[string(key)] = KeyPointer{
+		file:   e.activeFile.Name(),
+		offset: int(offset),
+		size:   len(data),
+	}
 
 	return nil
 }
 
 func (e *Engine) Get(key []byte) ([]byte, error) {
-	return nil, nil
+	pointer, ok := e.keyDir[string(key)]
+	if !ok {
+		return nil, common_errors.ErrKeyNotFound
+	}
+
+	f, err := os.Open(pointer.file)
+	if err != nil {
+		return nil, err
+	}
+
+	var buff = make([]byte, pointer.size)
+	n, err := f.ReadAt(buff, int64(pointer.offset))
+	if err != nil {
+		return nil, err
+	}
+
+	if n != pointer.size {
+		return nil, errors.New("read wrong number of bytes read")
+	}
+
+	entry := &Entry{}
+	err = entry.UnmarshalBinary(buff)
+	if err != nil {
+		return nil, err
+	}
+
+	return entry.Value, nil
 }
 
 func (e *Engine) Delete(key []byte) error {
+	_, ok := e.keyDir[string(key)]
+	if !ok {
+		return common_errors.ErrKeyNotFound
+	}
+
+	deleteEntry := &Entry{
+		Status: EntryStatusDeleted,
+		Key:    key,
+		Value:  nil,
+	}
+	entryData, err := deleteEntry.MarshalBinary()
+	if err != nil {
+		return err
+	}
+
+	n, err := e.activeFile.Write(entryData)
+	if err != nil {
+		return err
+	}
+
+	if n != len(entryData) {
+		return errors.New("write wrong number of bytes written")
+	}
+
+	delete(e.keyDir, string(key))
 	return nil
 }
 
 func (e *Engine) Sync() error {
-	return nil
+	return e.activeFile.Sync()
 }
 
 func (e *Engine) Merge() error {
