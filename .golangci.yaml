@@ -45,35 +45,6 @@ linters:
   - unparam
   - wastedassign
   - whitespace
-  # Experimental/additional (enable as needed)
-  # - asciicheck
-  # - bidichk
-  # - containedctx
-  # - decorder
-  # - depguard
-  # - dogsled
-  # - errchkjson
-  # - execinquery
-  # - exhaustivestruct
-  # - ginkgolinter
-  # - gomoddirectives
-  # - gomodguard
-  # - grouper
-  # - importas
-  # - ireturn
-  # - maintidx
-  # - nlreturn
-  # - nosprintfhostport
-  # - paralleltest
-  # - promlinter
-  # - reassign
-  # - stylecheck
-  # - tagliatelle
-  # - testpackage
-  # - usestdlibvars
-  # - varnamelen
-  # - wrapcheck
-  # - wsl
   settings:
     # Cyclomatic complexity
     cyclop:
@@ -193,9 +164,7 @@ formatters:
   enable:
   - gci
   - gofmt
-  - gofumpt
   - goimports
-
 run:
   timeout: 5m
   issues-exit-code: 1

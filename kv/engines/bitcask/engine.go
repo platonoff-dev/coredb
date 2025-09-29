@@ -1,10 +1,13 @@
 package bitcask
 
 import (
+	"encoding/binary"
 	"errors"
+	"io"
 	"log"
 	"os"
 	"path"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,10 +19,11 @@ const (
 )
 
 type Engine struct {
-	dirPath    string
-	keyDir     map[string]KeyPointer
-	keyDirLock sync.RWMutex
-	activeFile *os.File
+	dirPath      string
+	keyDir       map[string]KeyPointer
+	keyDirLock   sync.RWMutex
+	activeFile   *os.File
+	rolloverSize int
 }
 
 type KeyPointer struct {
@@ -30,13 +34,14 @@ type KeyPointer struct {
 
 func New(dirPath string) *Engine {
 	return &Engine{
-		dirPath: dirPath,
-		keyDir:  make(map[string]KeyPointer),
+		dirPath:      dirPath,
+		keyDir:       make(map[string]KeyPointer),
+		rolloverSize: roloverSize,
 	}
 }
 
 func (e *Engine) Open() error {
-	err := os.MkdirAll(e.dirPath, os.ModePerm)
+	err := os.MkdirAll(e.dirPath, 0750)
 	if err != nil {
 		return err
 	}
@@ -49,7 +54,7 @@ func (e *Engine) Open() error {
 
 	e.activeFile = file
 
-	// TODO: Looks ugly refactor
+	// TODO: Looks ugly, refactor
 	go func() {
 		for {
 			time.Sleep(1 * time.Second)
@@ -186,6 +191,73 @@ func (e *Engine) Sync() error {
 }
 
 func (e *Engine) Merge() error {
+	dirFiles, err := os.ReadDir(e.dirPath)
+	if err != nil {
+		return err
+	}
+
+	files := make(map[string]bool, len(dirFiles))
+	for _, fileInfo := range dirFiles {
+		files[fileInfo.Name()] = true
+	}
+
+	var filesToMerge []string
+	for k := range files {
+		if strings.HasSuffix(k, ".hint") {
+			continue
+		}
+
+		if strings.HasSuffix(k, ".data") {
+			hintName := strings.TrimSuffix(k, ".data") + ".hint"
+			if _, ok := files[hintName]; !ok {
+				filesToMerge = append(filesToMerge, hintName)
+			}
+		}
+	}
+
+	targetFileName := path.Join(e.dirPath, time.Now().Format(time.Now().String()))
+	targetFile, err := os.OpenFile(targetFileName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.ModePerm)
+	for _, fileName := range filesToMerge {
+		rawFile, err := os.Open(fileName)
+		if err != nil {
+			return err
+		}
+
+		defer rawFile.Close()
+
+		for {
+			entry, err := readEntry(rawFile)
+			if err == io.EOF {
+				break
+			}
+
+			if err != nil {
+				return err
+			}
+
+			if entry.Status != EntryStatusActive {
+				continue
+			}
+
+			entryData, err := entry.MarshalBinary()
+			if err != nil {
+				return err
+			}
+			_, err = targetFile.Write(entryData)
+			if err != nil {
+				return err
+			}
+
+			e.keyDirLock.Lock()
+			key := string(entry.Key)
+			e.keyDir[key] = KeyPointer{
+				file: targetFileName,
+				size: e.keyDir[key].size,
+			}
+			e.keyDirLock.Unlock()
+		}
+	}
+
 	return nil
 }
 
@@ -208,7 +280,7 @@ func (e *Engine) rolloverActiveFile() error {
 		}
 	}
 
-	f, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.ModePerm)
+	f, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.ModeAppend)
 	if err != nil {
 		return err
 	}
@@ -216,4 +288,36 @@ func (e *Engine) rolloverActiveFile() error {
 	e.activeFile = f
 
 	return nil
+}
+
+func readEntry(r *os.File) (*Entry, error) {
+	var buff = make([]byte, 1+1+4)
+	_, err := r.Read(buff)
+	if err != nil {
+		return nil, err
+	}
+
+	status := buff[0]
+	keyLength := buff[1]
+	valueLength := binary.NativeEndian.Uint32(buff[2:])
+
+	key := make([]byte, keyLength)
+	_, err = r.Read(key)
+	if err != nil {
+		return nil, err
+	}
+
+	value := make([]byte, valueLength)
+	_, err = r.Read(value)
+	if err != nil {
+		return nil, err
+	}
+
+	entry := &Entry{
+		Status: EntryStatus(status),
+		Key:    key,
+		Value:  value,
+	}
+
+	return entry, nil
 }
