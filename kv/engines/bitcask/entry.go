@@ -1,8 +1,10 @@
 package bitcask
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
+	"hash/crc32"
 )
 
 type EntryStatus byte
@@ -12,9 +14,11 @@ const (
 	EntryStatusDeleted
 )
 
+var crcTable = crc32.MakeTable(crc32.Castagnoli)
+
 type Entry struct {
 	CRC       uint32
-	Timestamp int64
+	Timestamp uint64
 	Status    EntryStatus
 
 	Key   []byte
@@ -26,28 +30,63 @@ func (e *Entry) MarshalBinary() ([]byte, error) {
 		return nil, errors.New("key too long")
 	}
 
-	buffLen := 1 + 1 + 4 + len(e.Key) + len(e.Value)
+	// Init
+	buffLen := 4 + 8 + 1 + binary.MaxVarintLen64 + binary.MaxVarintLen64 + len(e.Key) + len(e.Value)
+	offset := 0
 	buff := make([]byte, buffLen)
 
 	buff[0] = byte(e.Status)
-	buff[1] = byte(len(e.Key))
-	binary.NativeEndian.PutUint32(buff[2:6], uint32(len(e.Value)))
-	copy(buff[6:6+len(e.Key)], e.Key)
-	copy(buff[6+len(e.Key):], e.Value)
+	offset++
 
-	return buff, nil
+	binary.LittleEndian.PutUint64(buff[offset:], e.Timestamp)
+	offset += 8
+
+	offset += binary.PutUvarint(buff[offset:], uint64(len(e.Key)))
+
+	offset += binary.PutUvarint(buff[offset:], uint64(len(e.Value)))
+
+	copy(buff[offset:], e.Key)
+	offset += len(e.Key)
+
+	copy(buff[offset:], e.Value)
+	offset += len(e.Value)
+
+	result := buff[:offset]
+	checksum := crc32.Checksum(result, crcTable)
+	checksumBuff := make([]byte, 4)
+	binary.LittleEndian.PutUint32(checksumBuff, checksum)
+
+	return bytes.Join([][]byte{checksumBuff, result}, []byte{}), nil
 }
 
 func (e *Entry) UnmarshalBinary(data []byte) error {
-	e.Status = EntryStatus(data[0])
-	keyLength := data[1]
-	valueLength := binary.NativeEndian.Uint32(data[2:6])
-	key := make([]byte, keyLength)
-	value := make([]byte, valueLength)
-	copy(key, data[6:6+int(keyLength)])
-	copy(value, data[6+int(keyLength):])
+	offset := 0
 
-	e.Key = key
-	e.Value = value
+	e.CRC = binary.LittleEndian.Uint32(data[offset : offset+4])
+	offset += 4
+
+	if e.CRC != crc32.Checksum(data[offset:], crcTable) {
+		return errors.New("invalid checksum")
+	}
+
+	e.Timestamp = binary.LittleEndian.Uint64(data[offset : offset+8])
+	offset += 8
+
+	e.Status = EntryStatus(data[offset])
+	offset++
+
+	keyLength, n := binary.Uvarint(data[offset:])
+	offset += n
+
+	valueLength, n := binary.Uvarint(data[offset:])
+	offset += n
+
+	e.Key = make([]byte, keyLength)
+	copy(e.Key, data[offset:offset+int(keyLength)]) //nolint:gosec
+	offset += int(keyLength)                        //nolint:gosec
+
+	e.Value = make([]byte, valueLength)
+	copy(e.Value, data[offset:offset+int(valueLength)]) //nolint:gosec
+
 	return nil
 }

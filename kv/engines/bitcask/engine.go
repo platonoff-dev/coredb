@@ -1,3 +1,4 @@
+// Package bitcask key-value store engine implementation.
 package bitcask
 
 import (
