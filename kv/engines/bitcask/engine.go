@@ -1,29 +1,28 @@
 package bitcask
 
 import (
-	"encoding/binary"
 	"errors"
-	"io"
-	"log"
 	"os"
-	"path"
-	"strings"
+	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/platonoff-dev/coredb/kv/engines/common_errors"
 )
 
 const (
-	roloverSize = 1 * 1024 * 1024 * 1024 // 1 GiB
+	activeFileName = "active.bitcask.data"
+	roloverSize    = 1 * 1024 * 1024 * 1024 // 1 GiB
 )
 
 type Engine struct {
-	dirPath      string
-	keyDir       map[string]KeyPointer
-	keyDirLock   sync.RWMutex
-	activeFile   *os.File
-	rolloverSize int
+	activeFile              *os.File
+	activeFileSizeThreshold int64
+	activeFileSize          int64
+
+	keyDir     map[string]KeyPointer
+	keyDirLock sync.RWMutex
+
+	dirPath string
 }
 
 type KeyPointer struct {
@@ -32,49 +31,33 @@ type KeyPointer struct {
 	size   int
 }
 
-func New(dirPath string) *Engine {
-	return &Engine{
-		dirPath:      dirPath,
-		keyDir:       make(map[string]KeyPointer),
-		rolloverSize: roloverSize,
+func New(dirPath string) (*Engine, error) {
+	engine := &Engine{
+		dirPath:                 dirPath,
+		keyDir:                  make(map[string]KeyPointer),
+		activeFileSizeThreshold: roloverSize,
 	}
-}
 
-func (e *Engine) Open() error {
-	err := os.MkdirAll(e.dirPath, 0750)
+	err := os.MkdirAll(dirPath, 0750)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	filePath := path.Join(e.dirPath, "active.bitcask.data")
-	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.ModePerm)
+	activeFilePath := filepath.Join(dirPath, activeFileName)
+	activeFile, err := os.OpenFile(activeFilePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	engine.activeFile = activeFile
+
+	stat, err := activeFile.Stat()
+	if err != nil {
+		return nil, err
 	}
 
-	e.activeFile = file
+	engine.activeFileSize = stat.Size()
 
-	// TODO: Looks ugly, refactor
-	go func() {
-		for {
-			time.Sleep(1 * time.Second)
-			fileInfo, err := e.activeFile.Stat()
-			if err != nil {
-				log.Printf("Failed to stat active file: %v", err)
-				continue
-			}
-
-			size := fileInfo.Size()
-			if size >= roloverSize {
-				err = e.rolloverActiveFile()
-				if err != nil {
-					log.Printf("Failed to rollover active file: %v", err)
-				}
-			}
-		}
-	}()
-
-	return nil
+	return engine, nil
 }
 
 func (e *Engine) Close() error {
@@ -87,7 +70,8 @@ func (e *Engine) Close() error {
 }
 
 func (e *Engine) Put(key []byte, value []byte) error {
-	// It's not really a limitation, but as we keep all keys in ram we need to limit key sizes
+	// It's not really a limitation, but as we keep all keys in ram we need to limit key sizes.
+	// 255 bytes is more than enough for everyone
 	if len(key) > 255 {
 		return errors.New("key is too long")
 	}
@@ -98,40 +82,39 @@ func (e *Engine) Put(key []byte, value []byte) error {
 		Value:  value,
 	}
 
-	data, err := entry.MarshalBinary()
+	entryBytes, err := entry.MarshalBinary()
 	if err != nil {
 		return err
 	}
 
-	fileInfo, err := e.activeFile.Stat()
-	if err != nil {
-		return err
-	}
-	offset := fileInfo.Size()
-
-	n, err := e.activeFile.Write(data)
+	n, err := e.activeFile.Write(entryBytes)
 	if err != nil {
 		return err
 	}
 
-	if n != len(data) {
+	if n != len(entryBytes) {
 		return errors.New("write wrong number of bytes written")
 	}
 
+	e.keyDirLock.Lock()
+	e.activeFileSize += int64(n)
 	e.keyDir[string(key)] = KeyPointer{
 		file:   e.activeFile.Name(),
-		offset: int(offset),
-		size:   len(data),
+		offset: int(e.activeFileSize),
+		size:   len(entryBytes),
 	}
+	e.keyDirLock.Unlock()
 
 	return nil
 }
 
 func (e *Engine) Get(key []byte) ([]byte, error) {
+	e.keyDirLock.RLock()
 	pointer, ok := e.keyDir[string(key)]
 	if !ok {
 		return nil, common_errors.ErrKeyNotFound
 	}
+	e.keyDirLock.RUnlock()
 
 	f, err := os.Open(pointer.file)
 	if err != nil {
@@ -158,10 +141,12 @@ func (e *Engine) Get(key []byte) ([]byte, error) {
 }
 
 func (e *Engine) Delete(key []byte) error {
+	e.keyDirLock.RLock()
 	_, ok := e.keyDir[string(key)]
 	if !ok {
 		return common_errors.ErrKeyNotFound
 	}
+	e.keyDirLock.RUnlock()
 
 	deleteEntry := &Entry{
 		Status: EntryStatusDeleted,
@@ -182,7 +167,11 @@ func (e *Engine) Delete(key []byte) error {
 		return errors.New("write wrong number of bytes written")
 	}
 
+	e.activeFileSize += int64(n)
+
+	e.keyDirLock.Lock()
 	delete(e.keyDir, string(key))
+	e.keyDirLock.Unlock()
 	return nil
 }
 
@@ -191,133 +180,5 @@ func (e *Engine) Sync() error {
 }
 
 func (e *Engine) Merge() error {
-	dirFiles, err := os.ReadDir(e.dirPath)
-	if err != nil {
-		return err
-	}
-
-	files := make(map[string]bool, len(dirFiles))
-	for _, fileInfo := range dirFiles {
-		files[fileInfo.Name()] = true
-	}
-
-	var filesToMerge []string
-	for k := range files {
-		if strings.HasSuffix(k, ".hint") {
-			continue
-		}
-
-		if strings.HasSuffix(k, ".data") {
-			hintName := strings.TrimSuffix(k, ".data") + ".hint"
-			if _, ok := files[hintName]; !ok {
-				filesToMerge = append(filesToMerge, hintName)
-			}
-		}
-	}
-
-	targetFileName := path.Join(e.dirPath, time.Now().Format(time.Now().String()))
-	targetFile, err := os.OpenFile(targetFileName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.ModePerm)
-	for _, fileName := range filesToMerge {
-		rawFile, err := os.Open(fileName)
-		if err != nil {
-			return err
-		}
-
-		defer rawFile.Close()
-
-		for {
-			entry, err := readEntry(rawFile)
-			if err == io.EOF {
-				break
-			}
-
-			if err != nil {
-				return err
-			}
-
-			if entry.Status != EntryStatusActive {
-				continue
-			}
-
-			entryData, err := entry.MarshalBinary()
-			if err != nil {
-				return err
-			}
-			_, err = targetFile.Write(entryData)
-			if err != nil {
-				return err
-			}
-
-			e.keyDirLock.Lock()
-			key := string(entry.Key)
-			e.keyDir[key] = KeyPointer{
-				file: targetFileName,
-				size: e.keyDir[key].size,
-			}
-			e.keyDirLock.Unlock()
-		}
-	}
-
-	return nil
-}
-
-func (e *Engine) rolloverActiveFile() error {
-	e.keyDirLock.Lock()
-	defer e.keyDirLock.Unlock()
-
-	fileName := e.activeFile.Name()
-	newName := time.Now().String() + ".data"
-	e.activeFile.Close()
-	err := os.Rename(fileName, newName)
-	if err != nil {
-		return err
-	}
-
-	// TODO: not atomic! Investigate risks
-	for _, v := range e.keyDir {
-		if v.file == fileName {
-			v.file = newName
-		}
-	}
-
-	f, err := os.OpenFile(fileName, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.ModeAppend)
-	if err != nil {
-		return err
-	}
-
-	e.activeFile = f
-
-	return nil
-}
-
-func readEntry(r *os.File) (*Entry, error) {
-	var buff = make([]byte, 1+1+4)
-	_, err := r.Read(buff)
-	if err != nil {
-		return nil, err
-	}
-
-	status := buff[0]
-	keyLength := buff[1]
-	valueLength := binary.NativeEndian.Uint32(buff[2:])
-
-	key := make([]byte, keyLength)
-	_, err = r.Read(key)
-	if err != nil {
-		return nil, err
-	}
-
-	value := make([]byte, valueLength)
-	_, err = r.Read(value)
-	if err != nil {
-		return nil, err
-	}
-
-	entry := &Entry{
-		Status: EntryStatus(status),
-		Key:    key,
-		Value:  value,
-	}
-
-	return entry, nil
+	return errors.New("not implemented")
 }

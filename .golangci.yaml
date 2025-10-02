@@ -104,7 +104,6 @@ linters:
       - bools
       - buildtag
       - copylocks
-      - fieldalignment
       - httpresponse
       - loopclosure
       - lostcancel

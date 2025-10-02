@@ -13,9 +13,12 @@ const (
 )
 
 type Entry struct {
-	Status EntryStatus
-	Key    []byte
-	Value  []byte
+	CRC       uint32
+	Timestamp int64
+	Status    EntryStatus
+
+	Key   []byte
+	Value []byte
 }
 
 func (e *Entry) MarshalBinary() ([]byte, error) {

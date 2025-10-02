@@ -5,16 +5,15 @@ import (
 
 	"github.com/platonoff-dev/coredb/kv/engines/common_errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func setupTestEngine(t *testing.T) *Engine {
 	t.Helper()
 
 	dir := t.TempDir()
-	engine := New(dir)
-	if err := engine.Open(); err != nil {
-		t.Fatal(err)
-	}
+	engine, err := New(dir)
+	require.NoError(t, err)
 
 	return engine
 }
